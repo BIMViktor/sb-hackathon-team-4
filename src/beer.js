@@ -26,7 +26,8 @@ function prop(key, value) {
 }
 
 /** Artikelnummer och GTIN sparas som text så att inga siffror tappas. */
-export function beerGroups(beer, gtin) {
+export function beerGroups(beer, gtin, extraProps = []) {
+  const extra = extraProps.map(([key, value]) => prop(key, value));
   if (beer.kategori === "snus") {
     return [
       {
@@ -42,6 +43,7 @@ export function beerGroups(beer, gtin) {
             prop("Nikotin (mg/g)", beer.nikotinMgG),
             prop("Källa GTIN", beer.gtinKalla),
             prop("Källa", SOURCE),
+            ...extra,
           ],
         },
       },
@@ -63,6 +65,7 @@ export function beerGroups(beer, gtin) {
           prop("Pris exkl. pant (kr)", beer.prisKr),
           prop("Produktsida", beer.url),
           prop("Källa", SOURCE),
+          ...extra,
         ],
       },
     },
@@ -139,14 +142,14 @@ async function floorFor(client, ctx, pickedGuid, z) {
  * Ställer ut en burk vid en klickad punkt.
  * @returns {Promise<{ id: string, mode: string, center: number[] }>}
  */
-export async function placeCan(client, { beer, gtin, point, pickedGuid, mode = "zone" }) {
+export async function placeCan(client, { beer, gtin, point, pickedGuid, mode = "zone", extraProps = [] }) {
   if (!Array.isArray(point) || point.length !== 3) {
     throw new Error("Klicket saknar en 3D-punkt. Klicka på en yta i modellen.");
   }
   const ctx = await context(client);
   const [x, y, z] = viewerToBuilding(point);
   const { diameter, height } = sizeFor(beer);
-  const groups = beerGroups(beer, gtin);
+  const groups = beerGroups(beer, gtin, extraProps);
   const name = canName(beer);
 
   if (mode === "annotation") {

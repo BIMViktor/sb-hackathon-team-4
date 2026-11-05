@@ -91,3 +91,14 @@ Efter **Läs in rum** finns avsnittet **Namnsättning** längst ned i fliken Rum
 - **Återställ alla:** klicka två gånger. Det fungerar utan `confirm()`, som kan vara blockerat i StreamBIM:s iframe.
 - Ändrade namn används även av färgsättningen. Grupperar du på Long Name, eller kräver Name och Long Name i Datakvalitet, gäller de nya värdena.
 - **Begränsning:** ändringarna sparas i webbläsaren per projekt och ändrar inte IFC-modellen, eftersom rummen kommer från arkitektens IFC och skrivs över vid nästa uppladdning. Namnlistan är tänkt att föras in i projekteringsverktyget.
+
+## Egenkontroll öldrickning och produktblad
+
+När en öl identifieras med kameran tänds kortet **Egenkontroll öldrickning** överst i fliken Öl & snus. Det gäller både streckkod och bekräftat OCR-förslag. Kortet kan också startas manuellt med **Starta egenkontroll** på en vald öl. Logiken ligger i `src/egenkontroll.js`.
+
+- **Produktblad:** knappen **Öppna produktblad** leder till ölens sida på systembolaget.se (`https://www.systembolaget.se/{artikelnummer}`). Länken finns också på den valda ölen. Adressen visas även som text, eftersom det inte är verifierat att StreamBIM:s iframe tillåter popup-fönster.
+- **Kontrollpunkter:** åtta punkter som var och en får OK, Avvikelse eller Ej aktuell: arbetstid, plats, fordon, inköp, produkt mot produktblad, serveringstemperatur, vatten och mat samt pant. Läses ölen med streckkod förifylls punkten om produkt och produktblad.
+- **Klarmarkera:** alla punkter måste vara besvarade, avvikelser måste ha en kommentar och fältet "Utförd av" måste vara ifyllt. Fältet förifylls med användarens e-post från StreamBIM. Status blir **Godkänd** eller **Avvikelse**, och en klarmarkerad kontroll är låst.
+- **Koppling till modellen:** ställs en burk av samma öl ut efter en klarmarkerad egenkontroll, får objektet egenskaperna Egenkontroll, Egenkontroll datum och Egenkontroll utförd av.
+- **Export:** CSV med alla egenkontroller i projektet, ett svar per kolumn plus kommentarer.
+- **Lagring:** i webbläsaren per projekt. StreamBIM:s checklist-API beskriver bara läsning och export, inte hur man skapar checklistor, så egenkontrollen kan inte bli en StreamBIM-checklista härifrån.

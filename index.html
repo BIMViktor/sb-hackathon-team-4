@@ -43,6 +43,36 @@
         </div>
       </section>
 
+      <section id="ek" class="card ek" hidden aria-live="polite">
+        <div class="section-head">
+          <h2>Egenkontroll öldrickning</h2>
+          <span id="ek-status" class="badge missing">Pågår</span>
+        </div>
+        <div class="selected-head">
+          <span id="ek-swatch" class="swatch"></span>
+          <div>
+            <p id="ek-name" class="name">–</p>
+            <p id="ek-meta" class="meta">–</p>
+          </div>
+        </div>
+        <a id="ek-sheet" class="button-link" href="#" target="_blank" rel="noopener">Öppna produktblad</a>
+        <p id="ek-sheet-url" class="muted ek-url"></p>
+        <ol id="ek-points" class="ek-points"></ol>
+        <label class="field">
+          <span>Utförd av</span>
+          <input id="ek-by" inputmode="email" autocomplete="off" placeholder="Namn eller e-post" />
+        </label>
+        <ul id="ek-problems" class="ek-problems" hidden></ul>
+        <div class="ek-actions">
+          <button id="ek-done" type="button" class="primary">Klarmarkera</button>
+          <button id="ek-close" type="button">Stäng</button>
+        </div>
+        <div class="ek-history">
+          <span id="ek-count" class="muted"></span>
+          <button id="ek-export" type="button">Exportera egenkontroller</button>
+        </div>
+      </section>
+
       <section class="card">
         <div id="kind-filter" class="seg">
           <button type="button" data-kind="alla" class="on">Alla</button>
@@ -75,6 +105,11 @@
         </label>
         <p class="row"><span id="sel-size-label">Burk</span><b id="sel-size">–</b></p>
         <p class="row"><span id="sel-link-label">Produktsida</span><a id="sel-link" href="#" target="_blank" rel="noopener">systembolaget.se</a></p>
+
+        <div id="sel-ek-actions" class="sel-actions">
+          <a id="sel-sheet" class="button-link" href="#" target="_blank" rel="noopener">Produktblad</a>
+          <button id="sel-ek" type="button">Starta egenkontroll</button>
+        </div>
 
         <fieldset class="modes">
           <legend>Typ av objekt</legend>

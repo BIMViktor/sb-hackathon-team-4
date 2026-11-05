@@ -719,3 +719,94 @@ button.wide { width: 100%; margin-bottom: 8px; }
 .rc-picked .rn-edit { margin-left: 6px; }
 
 .rn-info { margin-top: 8px !important; font-size: 12px !important; }
+
+/* ---------- Egenkontroll öldrickning ---------- */
+
+.ek { border-color: var(--dx-green); border-top-width: 3px; }
+
+a.button-link {
+  display: inline-block;
+  padding: 7px 12px;
+  border: 1px solid var(--dx-slate);
+  border-radius: var(--dx-radius-sm);
+  color: var(--dx-slate);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+a.button-link::after { content: " ↗"; }
+
+a.button-link:hover { background: var(--dx-slate-tint); }
+
+.ek a.button-link { display: block; margin-top: 4px; text-align: center; }
+
+.ek-url { margin-top: 4px !important; font-size: 11px !important; word-break: break-all; }
+
+.ek-points { display: grid; gap: 8px; margin: 12px 0; padding: 0; list-style: none; counter-reset: ek; }
+
+.ek-points li {
+  padding: 8px 10px;
+  border: 1px solid var(--dx-border);
+  border-left: 3px solid var(--dx-border);
+  border-radius: var(--dx-radius-sm);
+  counter-increment: ek;
+}
+
+.ek-points li[data-value="ok"] { border-left-color: var(--dx-green); }
+.ek-points li[data-value="avvikelse"] { border-left-color: var(--dx-error); background: var(--dx-error-tint); }
+.ek-points li[data-value="ej"] { border-left-color: var(--dx-muted); }
+
+.ek-points p { margin: 0 0 6px; font-size: 13px; }
+
+.ek-points p::before { content: counter(ek) ". "; color: var(--dx-muted); font-weight: 700; }
+
+.ek-seg { display: flex; gap: 4px; }
+
+.ek-seg button { flex: 1; padding: 4px 6px; font-size: 12px; }
+
+.ek-seg button.on[data-answer="ok"] { border-color: var(--dx-green); background: var(--dx-green); color: #fff; }
+.ek-seg button.on[data-answer="avvikelse"] { border-color: var(--dx-error); background: var(--dx-error); color: #fff; }
+.ek-seg button.on[data-answer="ej"] { border-color: var(--dx-slate); background: var(--dx-slate); color: #fff; }
+
+.ek-comment {
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--dx-border);
+  border-radius: var(--dx-radius-sm);
+  font: inherit;
+  font-size: 13px;
+}
+
+.ek input#ek-by {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--dx-border);
+  border-radius: var(--dx-radius-sm);
+  font: inherit;
+}
+
+.ek-problems { margin: 0 0 8px; padding: 8px 8px 8px 24px; border-radius: var(--dx-radius-sm); background: var(--dx-error-tint); color: var(--dx-error); font-size: 12px; }
+
+.ek-actions { display: flex; gap: 6px; }
+
+.ek-actions button.primary { flex: 1; width: auto; margin: 0; }
+
+.ek-history {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--dx-border);
+}
+
+.ek-history .muted { font-size: 12px; }
+
+.ek-history button { padding: 5px 10px; font-size: 12px; }
+
+.sel-actions { display: flex; gap: 6px; margin-top: 10px; }
+
+.sel-actions > * { flex: 1; text-align: center; }
