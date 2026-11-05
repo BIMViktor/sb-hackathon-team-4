@@ -6,7 +6,7 @@
 
 import { catalog, canSize, isValidGtin } from "./catalog.js";
 import { objects } from "./mock-data.js";
-import { canName, describeError, placeCan, registry, removeCan, toCsv } from "./beer.js";
+import { canName, colorMap, describeError, placeCan, registry, removeCan, toCsv } from "./beer.js";
 import { connectWidget } from "./streambim.js";
 import { detectBarcodes, matchBeers, prepareImage, recognizeText } from "./ocr.js";
 import "./style.css";
@@ -22,6 +22,7 @@ const placedEl = $("#placed");
 const placedEmptyEl = $("#placed-empty");
 const countEl = $("#count");
 const exportEl = $("#export");
+const colorizeEl = $("#colorize");
 const logEl = $("#log");
 const simulatorEl = $("#simulator");
 const chipsEl = $("#object-chips");
@@ -34,6 +35,7 @@ const state = {
   armed: false,
   busy: false,
   cans: null,
+  colorized: false,
   gtinOverrides: readOverrides(),
 };
 
@@ -219,6 +221,7 @@ async function onPick(result) {
     };
     state.cans.add(can);
     renderPlaced();
+    if (state.colorized) applyColors();
     log(`${canName(beer)} utställd (${placed.mode === "zone" ? "zon" : "punkt"}, id ${placed.id}).`, "ok");
     if (!gtin) log(`Obs: Nr ${beer.artikelnummer} saknar GTIN. Fältet sparades tomt.`, "warn");
   } catch (error) {
@@ -239,6 +242,9 @@ function renderPlaced() {
   countEl.textContent = String(cans.length);
   placedEmptyEl.hidden = cans.length > 0;
   exportEl.disabled = cans.length === 0;
+  colorizeEl.disabled = !cans.some((can) => can.mode === "zone") && !state.colorized;
+  colorizeEl.textContent = state.colorized ? "Släck färger" : "Visa burkar i ölens färg";
+  colorizeEl.classList.toggle("on", state.colorized);
   placedEl.replaceChildren();
   for (const can of cans) {
     const item = document.createElement("li");
@@ -270,6 +276,7 @@ function renderPlaced() {
         const deleted = await removeCan(state.client, can);
         state.cans.remove(can.id);
         renderPlaced();
+        if (state.colorized) applyColors();
         log(deleted ? `Burken ${can.id} är borttagen.` : `Punkten ${can.id} finns kvar i StreamBIM men är borttagen ur listan.`, deleted ? "ok" : "warn");
       } catch (error) {
         log(`Kunde inte ta bort ${can.id}: ${describeError(error)}`, "error");
@@ -280,6 +287,39 @@ function renderPlaced() {
     placedEl.append(item);
   }
 }
+
+/* ---------- Färgsättning ---------- */
+
+async function applyColors({ zoom = false } = {}) {
+  const map = colorMap(state.cans?.list() ?? []);
+  if (!Object.keys(map).length) {
+    await state.client.colorCodeSpaces({});
+    state.colorized = false;
+    renderPlaced();
+    return;
+  }
+  await state.client.colorCodeSpaces(map);
+  if (zoom) state.client.zoomToSearchResult().catch(() => {});
+}
+
+colorizeEl.addEventListener("click", async () => {
+  try {
+    if (state.colorized) {
+      await state.client.colorCodeSpaces({});
+      state.colorized = false;
+      log("Färgsättningen är släckt.");
+    } else {
+      state.colorized = true;
+      await applyColors({ zoom: true });
+      const count = Object.keys(colorMap(state.cans.list())).length;
+      log(`${count} ${count === 1 ? "burk" : "burkar"} färgade i ölens färg. Resten av modellen tonas ned. Nya burkar syns i 3D efter ombearbetning.`, "ok");
+    }
+  } catch (error) {
+    state.colorized = false;
+    log(`Kunde inte färga burkarna: ${describeError(error)}`, "error");
+  }
+  renderPlaced();
+});
 
 exportEl.addEventListener("click", () => {
   const csv = toCsv(state.cans.list());

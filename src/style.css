@@ -433,3 +433,5 @@ details pre {
 .log li[data-kind="ok"] { color: var(--dx-green-hover); }
 .log li[data-kind="warn"] { color: var(--dx-warn); }
 .log li[data-kind="error"] { color: var(--dx-error); }
+
+button.wide { width: 100%; margin-bottom: 8px; }

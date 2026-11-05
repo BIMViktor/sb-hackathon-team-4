@@ -6,10 +6,11 @@ Ställ ut ölburkar från Systembolagets katalog i StreamBIM-modellen. Varje bur
 
 1. Sök och välj en öl i katalogen.
 2. Välj objekttyp:
-   - **Burk som zon** (standard): ett burkstort objekt (⌀ 66 mm, 115 mm hög för 33 cl och 168 mm för 50 cl) som står på ytan du klickar på. Det kan tas bort. Det ritas i 3D först när byggnaden har bearbetats om, men syns direkt i objektinformationen.
+   - **Burk som zon** (standard): en burkstor cylinder (24-hörnig kontur, ⌀ 66 mm, 115 mm hög för 33 cl och 168 mm för 50 cl) som står på ytan du klickar på. Det kan tas bort. Det ritas i 3D först när byggnaden har bearbetats om, men syns direkt i objektinformationen.
    - **Burk som punkt**: en annotation via `createObject`. Den syns direkt, men **StreamBIM kan inte radera annotationer**. Använd den sparsamt i sandlådan.
 3. Tryck **Ställ ut vid klick** och klicka på en yta i modellen. Varje klick ställer ut en burk tills du trycker igen.
-4. **Utställda burkar** listar det du ställt ut i projektet (sparas i webbläsaren). **Exportera CSV** ger antal per artikelnummer och GTIN med summa.
+4. **Visa burkar i ölens färg** färgar alla zon-burkar med ölens färg via `colorCodeSpaces` och tonar ned resten av modellen. Nya burkar färgas direkt om läget är på. **Släck färger** återställer. Färgen syns på burkar som redan ritas i 3D, alltså efter ombearbetning.
+5. **Utställda burkar** listar det du ställt ut i projektet (sparas i webbläsaren). **Exportera CSV** ger antal per artikelnummer och GTIN med summa.
 
 På localhost (`npm run dev -- --port 3000`) körs allt mot mock-data. Klicka på proverna under *Simulera* för att ställa ut.
 

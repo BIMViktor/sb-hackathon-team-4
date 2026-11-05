@@ -53,8 +53,11 @@ export function canName(beer) {
   return `Ölburk ${beer.namn} ${beer.volymMl / 10} cl (Nr ${beer.artikelnummer})`;
 }
 
-/** Åttahörning runt (x, y) som golvkontur, [x1, y1, x2, y2, …]. */
-export function canOutline(x, y, diameter, sides = 8) {
+/** Antal hörn i burkens kontur. 24 ger en nästan rund cylinder. */
+export const CAN_SIDES = 24;
+
+/** Regelbunden polygon runt (x, y) som golvkontur, [x1, y1, x2, y2, …]. */
+export function canOutline(x, y, diameter, sides = CAN_SIDES) {
   const r = diameter / 2;
   const outline = [];
   for (let i = 0; i < sides; i += 1) {
@@ -153,7 +156,7 @@ export async function placeCan(client, { beer, gtin, point, pickedGuid, mode = "
   const bottom = round(z);
   const top = round(z + height);
   const r = diameter / 2;
-  const area = round((8 / 2) * r * r * Math.sin((2 * Math.PI) / 8));
+  const area = round((CAN_SIDES / 2) * r * r * Math.sin((2 * Math.PI) / CAN_SIDES));
   const attributes = {
     layer: null,
     properties: {
@@ -191,6 +194,11 @@ export async function placeCan(client, { beer, gtin, point, pickedGuid, mode = "
   );
   if (!record?.id) throw new Error("StreamBIM svarade utan id för den nya burken.");
   return { id: record.id, mode, center: [x, y, z] };
+}
+
+/** Färgkarta för colorCodeSpaces: zon-id → ölens färg. Punkter är inga Space och hoppas över. */
+export function colorMap(cans) {
+  return Object.fromEntries(cans.filter((can) => can.mode === "zone").map((can) => [can.id, `#${can.farg}`]));
 }
 
 /** Raderar en zon-burk. Annotationer kan inte raderas i StreamBIM. */

@@ -15,7 +15,7 @@
  *   highlightObject, deHighlightAllObjects, gotoObject, gotoFloor,
  *   colorCodeObjects
  * Added for the beer-can widget (live + mock):
- *   getBuildingId, createObject, makeApiRequest
+ *   getBuildingId, createObject, makeApiRequest, colorCodeSpaces, zoomToSearchResult
  * Live only: client.api is the full StreamBIM.API. It is null in mock mode.
  * colorCodeObjects takes hex colors WITHOUT a leading #.
  * Do not log tokens, and do not call setAuthToken.
@@ -113,6 +113,8 @@ function wrapLive(api) {
     getBuildingId: () => api.getBuildingId(),
     createObject: (opts) => api.createObject(opts),
     makeApiRequest: (request) => api.makeApiRequest(request),
+    colorCodeSpaces: (map) => api.colorCodeSpaces(map),
+    zoomToSearchResult: () => api.zoomToSearchResult(),
   };
 }
 
@@ -216,6 +218,13 @@ function connectMock(handlers) {
     async makeApiRequest(request) {
       return mockRest.handle(request);
     },
+    async colorCodeSpaces(map) {
+      if (!map || typeof map !== "object") throw new Error("colorCodeSpaces vill ha en map av guid → #rrggbb.");
+      return true;
+    },
+    async zoomToSearchResult() {
+      return true;
+    },
   };
 }
 
@@ -288,6 +297,8 @@ function failedClient(reason) {
     getBuildingId: fail,
     createObject: fail,
     makeApiRequest: fail,
+    colorCodeSpaces: fail,
+    zoomToSearchResult: fail,
   };
 }
 
