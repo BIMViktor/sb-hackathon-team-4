@@ -597,3 +597,30 @@ button.wide { width: 100%; margin-bottom: 8px; }
 .rk-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .rk-actions button { padding: 6px 10px; font-size: 13px; }
 .rk-list li.note { display: block; }
+
+/* ---------- Kategorifilter (Alla / Öl / Snus) ---------- */
+
+.seg {
+  display: flex;
+  gap: 0;
+  margin-bottom: 10px;
+  border: 1px solid var(--dx-slate);
+  border-radius: var(--dx-radius-sm);
+  overflow: hidden;
+}
+
+.seg button {
+  flex: 1;
+  padding: 6px 8px;
+  border: 0;
+  border-right: 1px solid var(--dx-slate);
+  border-radius: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.seg button:last-child { border-right: 0; }
+
+.seg button.on { background: var(--dx-slate); color: #fff; }

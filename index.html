@@ -16,17 +16,17 @@
       </header>
 
       <nav class="tabs" role="tablist">
-        <button type="button" role="tab" data-tab="beer" class="on" aria-selected="true">Ölburkar</button>
+        <button type="button" role="tab" data-tab="beer" class="on" aria-selected="true">Öl &amp; snus</button>
         <button type="button" role="tab" data-tab="rooms" aria-selected="false">Rum</button>
         <button type="button" role="tab" data-tab="risk" aria-selected="false">Arbetsmiljö</button>
       </nav>
 
       <div id="tab-beer" data-panel="beer">
-      <p class="lead">Välj en öl från Systembolaget och klicka i modellen för att ställa ut burken.</p>
+      <p class="lead">Välj en öl från Systembolaget eller ett snus och klicka i modellen för att ställa ut burken eller dosan.</p>
 
       <section class="card">
         <div class="section-head">
-          <h2>Fota burken</h2>
+          <h2>Fota burken eller dosan</h2>
           <label class="button primary-outline" for="photo">Ta bild / välj fil</label>
         </div>
         <input id="photo" type="file" accept="image/*" capture="environment" hidden />
@@ -44,6 +44,11 @@
       </section>
 
       <section class="card">
+        <div id="kind-filter" class="seg">
+          <button type="button" data-kind="alla" class="on">Alla</button>
+          <button type="button" data-kind="öl">Öl</button>
+          <button type="button" data-kind="snus">Snus</button>
+        </div>
         <label class="field">
           <span>Sök i katalogen</span>
           <input id="search" type="search" placeholder="Namn, producent, artikelnummer eller GTIN" autocomplete="off" />
@@ -68,13 +73,13 @@
             <button id="gtin-save" type="button">Spara</button>
           </span>
         </label>
-        <p class="row"><span>Burk</span><b id="sel-size">–</b></p>
-        <p class="row"><span>Produktsida</span><a id="sel-link" href="#" target="_blank" rel="noopener">systembolaget.se</a></p>
+        <p class="row"><span id="sel-size-label">Burk</span><b id="sel-size">–</b></p>
+        <p class="row"><span id="sel-link-label">Produktsida</span><a id="sel-link" href="#" target="_blank" rel="noopener">systembolaget.se</a></p>
 
         <fieldset class="modes">
           <legend>Typ av objekt</legend>
-          <label><input type="radio" name="mode" value="zone" checked /> Burk som zon <small>(rätt storlek, kan tas bort, syns i 3D efter ombearbetning)</small></label>
-          <label><input type="radio" name="mode" value="annotation" /> Burk som punkt <small>(syns direkt, kan inte tas bort)</small></label>
+          <label><input type="radio" name="mode" value="zone" checked /> Som zon <small>(rätt storlek, kan tas bort, syns i 3D efter ombearbetning)</small></label>
+          <label><input type="radio" name="mode" value="annotation" /> Som punkt <small>(syns direkt, kan inte tas bort)</small></label>
         </fieldset>
 
         <button id="arm" type="button" class="primary">Ställ ut vid klick</button>
@@ -82,11 +87,11 @@
 
       <section class="card">
         <div class="section-head">
-          <h2>Utställda burkar <span id="count" class="count">0</span></h2>
+          <h2>Utställt <span id="count" class="count">0</span></h2>
           <button id="export" type="button" disabled>Exportera CSV</button>
         </div>
-        <button id="colorize" type="button" class="wide" disabled>Visa burkar i ölens färg</button>
-        <p id="placed-empty" class="muted">Inga burkar ännu.</p>
+        <button id="colorize" type="button" class="wide" disabled>Visa i produktens färg</button>
+        <p id="placed-empty" class="muted">Inget utställt ännu.</p>
         <ul id="placed" class="placed"></ul>
       </section>
       </div>

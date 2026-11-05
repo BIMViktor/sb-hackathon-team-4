@@ -10,7 +10,7 @@
  * Båda får property setet "Systembolaget" med artikelnummer och GTIN.
  */
 
-import { canSize, varunummer } from "./catalog.js";
+import { refLabel, sizeFor, sizeLabel, strengthLabel, varunummer } from "./catalog.js";
 
 export const PSET = "Systembolaget";
 const SOURCE = "sb-hackathon-team-4 ölburks-widget";
@@ -27,6 +27,26 @@ function prop(key, value) {
 
 /** Artikelnummer och GTIN sparas som text så att inga siffror tappas. */
 export function beerGroups(beer, gtin) {
+  if (beer.kategori === "snus") {
+    return [
+      {
+        label: "Snus",
+        content: {
+          properties: [
+            prop("GTIN", gtin ? String(gtin) : ""),
+            prop("Namn", beer.namn),
+            prop("Producent", beer.producent),
+            prop("Typ", beer.stil),
+            prop("Vikt (g)", beer.viktG),
+            prop("Portioner", beer.portioner),
+            prop("Nikotin (mg/g)", beer.nikotinMgG),
+            prop("Källa GTIN", beer.gtinKalla),
+            prop("Källa", SOURCE),
+          ],
+        },
+      },
+    ];
+  }
   return [
     {
       label: PSET,
@@ -50,7 +70,8 @@ export function beerGroups(beer, gtin) {
 }
 
 export function canName(beer) {
-  return `Ölburk ${beer.namn} ${beer.volymMl / 10} cl (Nr ${beer.artikelnummer})`;
+  const kind = beer.kategori === "snus" ? "Snusdosa" : "Ölburk";
+  return `${kind} ${beer.namn} ${sizeLabel(beer)} (${refLabel(beer)})`;
 }
 
 /** Antal hörn i burkens kontur. 24 ger en nästan rund cylinder. */
@@ -124,7 +145,7 @@ export async function placeCan(client, { beer, gtin, point, pickedGuid, mode = "
   }
   const ctx = await context(client);
   const [x, y, z] = viewerToBuilding(point);
-  const { diameter, height } = canSize(beer.volymMl);
+  const { diameter, height } = sizeFor(beer);
   const groups = beerGroups(beer, gtin);
   const name = canName(beer);
 
@@ -163,7 +184,7 @@ export async function placeCan(client, { beer, gtin, point, pickedGuid, mode = "
       Name: name,
       "Long Name": `GTIN ${gtin || "saknas"}`,
       "@kind": "Space",
-      Description: `${beer.producent}, ${beer.stil}, ${beer.alkohol} % vol. ${beer.url}`,
+      Description: `${beer.producent}, ${beer.stil}, ${strengthLabel(beer)}. ${beer.url}`,
     },
     groups: [
       ...groups,
@@ -244,21 +265,23 @@ export function registry(projectId) {
 export function toCsv(cans) {
   const rows = new Map();
   for (const can of cans) {
-    const key = `${can.artikelnummer}|${can.gtin ?? ""}`;
+    const key = `${can.productId ?? can.artikelnummer}|${can.gtin ?? ""}`;
     const row = rows.get(key) ?? { ...can, antal: 0 };
     row.antal += 1;
     rows.set(key, row);
   }
-  const header = ["Artikelnummer", "GTIN", "Namn", "Volym (ml)", "Antal", "Pris exkl. pant (kr)", "Summa (kr)"];
+  const money = (value) => (value == null ? "" : String(Math.round(value * 100) / 100).replace(".", ","));
+  const header = ["Kategori", "Artikelnummer", "GTIN", "Namn", "Storlek", "Antal", "Pris (kr)", "Summa (kr)"];
   const lines = [...rows.values()].map((row) =>
     [
-      row.artikelnummer,
+      row.kategori ?? "öl",
+      row.artikelnummer ?? "",
       row.gtin ?? "",
       row.namn,
-      row.volymMl,
+      row.storlek ?? (row.volymMl ? `${row.volymMl / 10} cl` : ""),
       row.antal,
-      String(row.prisKr).replace(".", ","),
-      String(Math.round(row.antal * row.prisKr * 100) / 100).replace(".", ","),
+      money(row.prisKr),
+      row.prisKr == null ? "" : money(row.antal * row.prisKr),
     ].join(";"),
   );
   return [header.join(";"), ...lines].join("\r\n");

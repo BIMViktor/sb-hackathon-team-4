@@ -1,5 +1,5 @@
 /**
- * Ölburkskatalog från Systembolaget.
+ * Katalog: ölburkar från Systembolaget och snusdosor (längre ned).
  *
  * Artikelnummer ("Nr" på systembolaget.se) är kontrollerade mot produktsidorna
  * 2026-11-05. De två sista siffrorna är förpackningskoden (t.ex. 12/32 = burk
@@ -130,7 +130,96 @@ export const catalog = [
     gtin: null,
     farg: "455a64",
   },
-].map((beer) => ({ ...beer, url: `${SB}${beer.artikelnummer}` }));
+].map((beer) => ({ ...beer, kategori: "öl", id: beer.artikelnummer, url: `${SB}${beer.artikelnummer}` }));
+
+/**
+ * Snus säljs inte på Systembolaget utan i dagligvaruhandeln, så det finns inget
+ * Systembolaget-artikelnummer. Snuset identifieras på GTIN (EAN-13 på dosan).
+ * GTIN är hämtade från återförsäljares produktsidor 2026-11-05 (källa per rad)
+ * och gäller en dosa, inte en stock. Nikotinhalt och vikt enligt samma källor.
+ */
+const snus = [
+  {
+    namn: "General Original Portion",
+    producent: "Swedish Match",
+    stil: "Originalportion",
+    viktG: 24,
+    portioner: 24,
+    nikotinMgG: 8,
+    gtin: "7311250448805",
+    gtinKalla: "https://samgross.se/general-portion/24-g",
+    farg: "1a1a1a",
+  },
+  {
+    namn: "General Original Portion Extra Strong",
+    producent: "Swedish Match",
+    stil: "Originalportion",
+    viktG: 22,
+    portioner: 20,
+    nikotinMgG: 14,
+    gtin: "7311250449505",
+    gtinKalla: "https://www.snusport.com/product/general-extra-strong-portion/",
+    farg: "8b1a1a",
+  },
+  {
+    namn: "General ONE Original Portion Strong",
+    producent: "Swedish Match",
+    stil: "Originalportion",
+    viktG: 18,
+    portioner: 20,
+    nikotinMgG: 13,
+    gtin: "7311250444470",
+    gtinKalla: "https://billigsnus.se/produkt/snus/portionssnus/one-svart/",
+    farg: "2b2b2b",
+  },
+  {
+    namn: "General XR Original Slim",
+    producent: "Swedish Match",
+    stil: "Originalportion, slim",
+    viktG: 18.9,
+    portioner: 21,
+    nikotinMgG: 9.4,
+    gtin: "7311250447389",
+    gtinKalla: "https://www.snusport.com/product/xr-general-original-slim-portion/",
+    farg: "5c5c5c",
+  },
+  {
+    namn: "General Original Mini Portion",
+    producent: "Swedish Match",
+    stil: "Originalportion, mini",
+    viktG: 10.4,
+    portioner: 20,
+    nikotinMgG: 8,
+    gtin: "7311250446665",
+    gtinKalla: "https://snusfabriken.com/produkt/portion-general-original-mini-portionssnus/",
+    farg: "a07c3c",
+  },
+].map((item) => ({ ...item, kategori: "snus", artikelnummer: null, prisKr: null, id: `snus-${item.gtin}`, url: item.gtinKalla }));
+
+catalog.push(...snus);
+
+const decimal = (value) => String(value).replace(".", ",");
+
+/** Mått i meter. Snusdosa: nominellt ⌀ 67 × 21 mm. */
+export function sizeFor(product) {
+  if (product.kategori === "snus") return { diameter: 0.067, height: 0.021 };
+  return canSize(product.volymMl);
+}
+
+/** "50 cl" eller "24 g". */
+export function sizeLabel(product) {
+  return product.kategori === "snus" ? `${decimal(product.viktG)} g` : `${product.volymMl / 10} cl`;
+}
+
+/** Huvudidentitet: "Nr 141212" för öl, "GTIN 7311…" för snus. */
+export function refLabel(product) {
+  return product.artikelnummer ? `Nr ${product.artikelnummer}` : `GTIN ${product.gtin}`;
+}
+
+/** "5,3 %" eller "8 mg/g". */
+export function strengthLabel(product) {
+  return product.kategori === "snus" ? `${decimal(product.nikotinMgG)} mg/g` : `${decimal(product.alkohol)} %`;
+}
 
 /** Nominella standardmått för aluminiumburk (meter). */
 export function canSize(volymMl) {
@@ -154,5 +243,5 @@ export function isValidGtin(value) {
 
 /** Varunummer = artikelnummer utan de två sista siffrorna (förpackningskoden). */
 export function varunummer(artikelnummer) {
-  return String(artikelnummer).slice(0, -2);
+  return artikelnummer ? String(artikelnummer).slice(0, -2) : "";
 }

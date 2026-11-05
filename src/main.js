@@ -4,7 +4,7 @@
  * Kopplingen ligger i src/streambim.js, placeringen i src/beer.js.
  */
 
-import { catalog, canSize, isValidGtin } from "./catalog.js";
+import { catalog, isValidGtin, refLabel, sizeFor, sizeLabel, strengthLabel } from "./catalog.js";
 import { objects } from "./mock-data.js";
 import { canName, colorMap, describeError, placeCan, registry, removeCan, toCsv } from "./beer.js";
 import { connectWidget } from "./streambim.js";
@@ -38,6 +38,7 @@ const state = {
   busy: false,
   cans: null,
   colorized: false,
+  kind: "alla",
   gtinOverrides: readOverrides(),
 };
 
@@ -62,8 +63,8 @@ function readOverrides() {
   }
 }
 
-function saveOverride(artikelnummer, gtin) {
-  state.gtinOverrides[artikelnummer] = gtin;
+function saveOverride(productId, gtin) {
+  state.gtinOverrides[productId] = gtin;
   try {
     localStorage.setItem("beer-gtin-overrides", JSON.stringify(state.gtinOverrides));
   } catch {
@@ -72,7 +73,7 @@ function saveOverride(artikelnummer, gtin) {
 }
 
 function gtinFor(beer) {
-  return beer.gtin ?? state.gtinOverrides[beer.artikelnummer] ?? null;
+  return beer.gtin ?? state.gtinOverrides[beer.id] ?? null;
 }
 
 function gtinStatus(beer) {
@@ -85,12 +86,12 @@ function gtinStatus(beer) {
 /* ---------- Katalog ---------- */
 
 function cl(beer) {
-  return `${beer.volymMl / 10} cl`;
+  return sizeLabel(beer);
 }
 
 function matches(beer, query) {
   if (!query) return true;
-  const haystack = [beer.namn, beer.producent, beer.stil, beer.artikelnummer, gtinFor(beer) ?? ""].join(" ").toLowerCase();
+  const haystack = [beer.namn, beer.producent, beer.stil, beer.kategori, beer.artikelnummer ?? "", gtinFor(beer) ?? ""].join(" ").toLowerCase();
   return query
     .toLowerCase()
     .split(/\s+/)
@@ -100,7 +101,7 @@ function matches(beer, query) {
 function renderCatalog() {
   const query = searchEl.value.trim();
   catalogEl.replaceChildren();
-  const hits = catalog.filter((beer) => matches(beer, query));
+  const hits = catalog.filter((beer) => (state.kind === "alla" || beer.kategori === state.kind) && matches(beer, query));
   if (!hits.length) {
     const empty = document.createElement("li");
     empty.className = "muted";
@@ -124,7 +125,7 @@ function renderCatalog() {
     const title = document.createElement("b");
     title.textContent = beer.namn;
     const meta = document.createElement("small");
-    meta.textContent = `Nr ${beer.artikelnummer} · ${cl(beer)} · ${String(beer.alkohol).replace(".", ",")} %`;
+    meta.textContent = `${refLabel(beer)} · ${cl(beer)} · ${strengthLabel(beer)}`;
     text.append(title, meta);
 
     const badge = document.createElement("span");
@@ -144,17 +145,20 @@ function select(beer) {
   selectedEl.hidden = false;
   $("#sel-swatch").style.background = `#${beer.farg}`;
   $("#sel-name").textContent = beer.namn;
-  $("#sel-meta").textContent = `${beer.producent} · ${beer.stil} · ${String(beer.alkohol).replace(".", ",")} % · ${String(beer.prisKr.toFixed(2)).replace(".", ",")} kr`;
-  $("#sel-artnr").textContent = beer.artikelnummer;
+  $("#sel-meta").textContent = [beer.producent, beer.stil, strengthLabel(beer), beer.prisKr != null ? `${beer.prisKr.toFixed(2).replace(".", ",")} kr` : null, beer.portioner ? `${beer.portioner} portioner` : null].filter(Boolean).join(" · ");
+  $("#sel-artnr").textContent = beer.artikelnummer ?? "– (säljs ej på Systembolaget)";
   const gtin = gtinFor(beer);
   const gtinEl = $("#sel-gtin");
   gtinEl.textContent = gtin ?? "saknas";
   gtinEl.className = gtin && isValidGtin(gtin) ? "" : "warn";
   $("#gtin-edit").hidden = Boolean(beer.gtin);
   $("#gtin-input").value = beer.gtin ? "" : gtin ?? "";
-  const size = canSize(beer.volymMl);
+  const size = sizeFor(beer);
+  $("#sel-size-label").textContent = beer.kategori === "snus" ? "Dosa" : "Burk";
   $("#sel-size").textContent = `${cl(beer)}, ⌀ ${size.diameter * 1000} × ${size.height * 1000} mm`;
+  $("#sel-link-label").textContent = beer.kategori === "snus" ? "Källa GTIN" : "Produktsida";
   $("#sel-link").href = beer.url;
+  $("#sel-link").textContent = new URL(beer.url).hostname.replace(/^www\./, "");
   renderCatalog();
   updateArm();
 }
@@ -167,12 +171,20 @@ $("#gtin-save").addEventListener("click", () => {
     log(`${value || "Tomt"} är inget giltigt GTIN (fel längd eller kontrollsiffra).`, "error");
     return;
   }
-  saveOverride(beer.artikelnummer, value);
-  log(`GTIN ${value} sparat för Nr ${beer.artikelnummer}.`, "ok");
+  saveOverride(beer.id, value);
+  log(`GTIN ${value} sparat för ${beer.namn} (${refLabel(beer)}).`, "ok");
   select(beer);
 });
 
 searchEl.addEventListener("input", renderCatalog);
+
+$("#kind-filter").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-kind]");
+  if (!button) return;
+  state.kind = button.dataset.kind;
+  for (const item of $("#kind-filter").querySelectorAll("button")) item.classList.toggle("on", item === button);
+  renderCatalog();
+});
 
 /* ---------- Utställning ---------- */
 
@@ -214,7 +226,10 @@ async function onPick(result) {
       id: placed.id,
       mode: placed.mode,
       center: placed.center,
+      productId: beer.id,
+      kategori: beer.kategori,
       artikelnummer: beer.artikelnummer,
+      storlek: cl(beer),
       gtin,
       namn: beer.namn,
       volymMl: beer.volymMl,
@@ -226,7 +241,7 @@ async function onPick(result) {
     renderPlaced();
     if (state.colorized) applyColors();
     log(`${canName(beer)} utställd (${placed.mode === "zone" ? "zon" : "punkt"}, id ${placed.id}).`, "ok");
-    if (!gtin) log(`Obs: Nr ${beer.artikelnummer} saknar GTIN. Fältet sparades tomt.`, "warn");
+    if (!gtin) log(`Obs: ${refLabel(beer)} saknar GTIN. Fältet sparades tomt.`, "warn");
   } catch (error) {
     const text = describeError(error);
     if (/DataCloneError/i.test(text)) {
@@ -246,7 +261,7 @@ function renderPlaced() {
   placedEmptyEl.hidden = cans.length > 0;
   exportEl.disabled = cans.length === 0;
   colorizeEl.disabled = !cans.some((can) => can.mode === "zone") && !state.colorized;
-  colorizeEl.textContent = state.colorized ? "Släck färger" : "Visa burkar i ölens färg";
+  colorizeEl.textContent = state.colorized ? "Släck färger" : "Visa i produktens färg";
   colorizeEl.classList.toggle("on", state.colorized);
   placedEl.replaceChildren();
   for (const can of cans) {
@@ -257,9 +272,9 @@ function renderPlaced() {
     const text = document.createElement("span");
     text.className = "beer-text";
     const title = document.createElement("b");
-    title.textContent = `${can.namn} ${can.volymMl / 10} cl`;
+    title.textContent = `${can.namn} ${can.storlek ?? `${can.volymMl / 10} cl`}`;
     const meta = document.createElement("small");
-    meta.textContent = `Nr ${can.artikelnummer} · GTIN ${can.gtin ?? "saknas"} · ${can.mode === "zone" ? "zon" : "punkt"}`;
+    meta.textContent = `${can.artikelnummer ? `Nr ${can.artikelnummer} · ` : ""}GTIN ${can.gtin ?? "saknas"} · ${can.mode === "zone" ? "zon" : "punkt"}`;
     text.append(title, meta);
 
     const actions = document.createElement("span");
@@ -315,7 +330,7 @@ colorizeEl.addEventListener("click", async () => {
       state.colorized = true;
       await applyColors({ zoom: true });
       const count = Object.keys(colorMap(state.cans.list())).length;
-      log(`${count} ${count === 1 ? "burk" : "burkar"} färgade i ölens färg. Resten av modellen tonas ned. Nya burkar syns i 3D efter ombearbetning.`, "ok");
+      log(`${count} objekt färgade i produktens färg. Resten av modellen tonas ned. Nya objekt syns i 3D efter ombearbetning.`, "ok");
     }
   } catch (error) {
     state.colorized = false;
@@ -332,7 +347,7 @@ exportEl.addEventListener("click", () => {
   link.download = "olburkar.csv";
   link.click();
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-  log("CSV med artikelnummer, GTIN och antal exporterad.", "ok");
+  log("CSV med kategori, artikelnummer, GTIN och antal exporterad.", "ok");
 });
 
 /* ---------- Fota burk ---------- */
@@ -369,7 +384,7 @@ function renderCandidates(results) {
     const title = document.createElement("b");
     title.textContent = `${beer.namn} ${cl(beer)}`;
     const meta = document.createElement("small");
-    meta.textContent = `Nr ${beer.artikelnummer} · ${reasons.join(", ") || "svag träff"}`;
+    meta.textContent = `${refLabel(beer)} · ${reasons.join(", ") || "svag träff"}`;
     text.append(title, meta);
     const badge = document.createElement("span");
     badge.className = `badge ${score >= 0.75 ? "ok" : score >= 0.45 ? "missing" : "bad"}`;
@@ -377,11 +392,11 @@ function renderCandidates(results) {
     button.append(swatch, text, badge);
     button.addEventListener("click", () => {
       if (lastBarcode && !gtinFor(beer) && isValidGtin(lastBarcode)) {
-        saveOverride(beer.artikelnummer, lastBarcode);
-        log(`Streckkoden ${lastBarcode} sparad som GTIN för Nr ${beer.artikelnummer}.`, "ok");
+        saveOverride(beer.id, lastBarcode);
+        log(`Streckkoden ${lastBarcode} sparad som GTIN för ${beer.namn}.`, "ok");
       }
       select(beer);
-      log(`Fotot kopplat till ${beer.namn} ${cl(beer)} (Nr ${beer.artikelnummer}).`, "ok");
+      log(`Fotot kopplat till ${beer.namn} ${cl(beer)} (${refLabel(beer)}).`, "ok");
       selectedEl.scrollIntoView({ behavior: "smooth", block: "start" });
     });
     item.append(button);
@@ -412,7 +427,7 @@ photoEl.addEventListener("change", async () => {
       setProgress(null, "Streckkoden matchar en öl i katalogen.");
       renderCandidates(results);
       select(results[0].beer);
-      log(`Streckkod ${barcode.codes[0]} → ${results[0].beer.namn} (Nr ${results[0].beer.artikelnummer}).`, "ok");
+      log(`Streckkod ${barcode.codes[0]} → ${results[0].beer.namn} (${refLabel(results[0].beer)}).`, "ok");
       return;
     }
     if (barcode.codes.length) {
@@ -526,7 +541,7 @@ ready
       const projectId = await client.getProjectId().catch(() => "okänt");
       state.cans = registry(projectId);
       renderPlaced();
-      log(`Ansluten (${modeLabel[client.mode]}), projekt ${projectId}. ${catalog.length} öl i katalogen.`, "ok");
+      log(`Ansluten (${modeLabel[client.mode]}), projekt ${projectId}. ${catalog.filter((p) => p.kategori === "öl").length} öl och ${catalog.filter((p) => p.kategori === "snus").length} snus i katalogen.`, "ok");
     }
     updateArm();
   })

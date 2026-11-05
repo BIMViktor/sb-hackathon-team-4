@@ -69,3 +69,13 @@ Widgeten har tre flikar: **Ölburkar**, **Rum** och **Arbetsmiljö**. Rum och Ar
 - Klick i modellen ställer bara ut burkar när fliken Ölburkar är aktiv. Rum följer alltid klick och våningsbyten, och Arbetsmiljö tar emot klick när den fliken är aktiv.
 - Både Rum och "Visa burkar i ölens färg" använder `colorCodeSpaces`. Den som anropas sist gäller.
 - Stilen för båda flikarna har fått Dalux-färgerna.
+
+## Snus
+
+Fliken heter nu **Öl & snus**. Katalogen har ett filter: Alla, Öl eller Snus.
+
+- Snus säljs inte på Systembolaget utan i dagligvaruhandeln, så det finns inget artikelnummer därifrån. Snuset identifieras på **GTIN** (EAN-13 på dosan, gäller en dosa och inte en stock).
+- Fem sorter från Swedish Match (General Original Portion, Original Portion Extra Strong, ONE Original Portion Strong, XR Original Slim och Original Mini Portion). GTIN, vikt, antal portioner och nikotinhalt är hämtade från återförsäljares produktsidor 2026-11-05. Källan ligger per rad i `src/catalog.js` och följer med som egenskapen "Källa GTIN".
+- Dosan ställs ut som en zon på ⌀ 67 × 21 mm (nominellt mått) med property setet **Snus**: GTIN, namn, producent, typ, vikt, portioner, nikotin (mg/g) och källa.
+- Fotot fungerar även för snus. Streckkoden ger direktträff, och i OCR väger ovanliga ord som "Mini", "Slim" och "ONE" tyngre så att rätt variant hamnar först. Vikt på dosan (t.ex. "22 g") ger plus.
+- CSV-exporten har kolumnerna Kategori, Artikelnummer, GTIN, Namn, Storlek, Antal, Pris och Summa. Snus saknar pris i katalogen.

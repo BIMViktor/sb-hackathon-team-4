@@ -165,15 +165,29 @@ function bestSimilarity(target, ocrWords) {
 
 const STOP = new Set(["ol", "the", "och", "of", "brewery", "bryggeri", "brewing", "co"]);
 
-function nameScore(name, ocrWords) {
-  const targets = words(name).filter((word) => word.length >= 3 && !STOP.has(word));
+function nameTokens(name) {
+  return words(name).filter((word) => word.length >= 3 && !STOP.has(word));
+}
+
+/** Ovanliga ord i katalogen (t.ex. "mini", "slim") väger mer än vanliga ("general"). */
+function documentFrequency(catalog) {
+  const df = new Map();
+  for (const product of catalog) {
+    for (const token of new Set(nameTokens(product.namn))) df.set(token, (df.get(token) ?? 0) + 1);
+  }
+  return (token) => Math.log(1 + catalog.length / (df.get(token) ?? 1));
+}
+
+function nameScore(name, ocrWords, idf = () => 1) {
+  const targets = nameTokens(name);
   if (!targets.length) return 0;
   let weighted = 0;
   let total = 0;
   for (const target of targets) {
     const similarity = bestSimilarity(target, ocrWords);
-    weighted += target.length * (similarity >= 0.6 ? similarity : 0);
-    total += target.length;
+    const weight = target.length * idf(target);
+    weighted += weight * (similarity >= 0.6 ? similarity : 0);
+    total += weight;
   }
   return weighted / total;
 }
@@ -195,6 +209,12 @@ function readVolumes(text) {
   return values;
 }
 
+function readGrams(text) {
+  const values = [];
+  for (const match of text.matchAll(/(\d{1,2}(?:[,.]\d)?)\s*g\b/gi)) values.push(Number(match[1].replace(",", ".")));
+  return values;
+}
+
 function readDigits(text) {
   return (text.match(/\d[\d\s]{6,16}\d/g) ?? []).map((run) => run.replace(/\s/g, ""));
 }
@@ -209,6 +229,8 @@ export function matchBeers(text, catalog, { gtinFor = (beer) => beer.gtin, barco
   const abvs = readAbv(raw);
   const volumes = readVolumes(raw);
   const digits = [...readDigits(raw), ...barcodes];
+  const grams = readGrams(raw);
+  const idf = documentFrequency(catalog);
 
   const results = catalog.map((beer) => {
     const reasons = [];
@@ -219,17 +241,17 @@ export function matchBeers(text, catalog, { gtinFor = (beer) => beer.gtin, barco
     if (gtin && digits.includes(gtin)) {
       return { beer, score: 0.98, reasons: ["GTIN finns i texten"] };
     }
-    if (digits.some((run) => run.includes(beer.artikelnummer))) {
+    if (beer.artikelnummer && digits.some((run) => run.includes(beer.artikelnummer))) {
       return { beer, score: 0.95, reasons: ["Artikelnumret finns i texten"] };
     }
 
-    const name = nameScore(beer.namn, ocrWords);
+    const name = nameScore(beer.namn, ocrWords, idf);
     const producer = nameScore(beer.producent, ocrWords);
     let score = 0.7 * name + 0.15 * producer;
     if (name > 0) reasons.push(`namn ${Math.round(name * 100)} %`);
     if (producer > 0) reasons.push(`producent ${Math.round(producer * 100)} %`);
 
-    if (abvs.length) {
+    if (abvs.length && beer.alkohol != null) {
       if (abvs.some((abv) => Math.abs(abv - beer.alkohol) < 0.051)) {
         score += 0.1;
         reasons.push(`${String(beer.alkohol).replace(".", ",")} %`);
@@ -237,10 +259,18 @@ export function matchBeers(text, catalog, { gtinFor = (beer) => beer.gtin, barco
         score -= 0.1;
       }
     }
-    if (volumes.length) {
+    if (volumes.length && beer.volymMl) {
       if (volumes.includes(beer.volymMl)) {
         score += 0.05;
         reasons.push(`${beer.volymMl / 10} cl`);
+      } else {
+        score -= 0.05;
+      }
+    }
+    if (grams.length && beer.viktG) {
+      if (grams.some((value) => Math.abs(value - beer.viktG) < 0.05)) {
+        score += 0.05;
+        reasons.push(`${String(beer.viktG).replace(".", ",")} g`);
       } else {
         score -= 0.05;
       }
