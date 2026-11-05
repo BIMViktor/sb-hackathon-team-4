@@ -9,27 +9,68 @@
     <div class="frame">
       <header>
         <div>
-          <p class="kicker">StreamBIM hackathon</p>
-          <h1>Team 4</h1>
+          <p class="kicker">StreamBIM hackathon · Team 4</p>
+          <h1>Ölburkar</h1>
         </div>
         <p id="status" class="status">Ansluter…</p>
       </header>
 
-      <p class="lead">Klicka på något i modellen.</p>
-      <p class="note">Namn, typ och våning visas här, och objektet markeras i vyn. Ändra src/main.js och src/style.css. Låt src/streambim.js vara. Inga nya paket. En push till main syns efter ungefär en minut.</p>
+      <p class="lead">Välj en öl från Systembolaget och klicka i modellen för att ställa ut burken.</p>
 
       <section class="card">
-        <p id="empty">Inget valt ännu.</p>
-        <div id="facts" hidden>
-          <p id="name" class="name">–</p>
-          <p class="row"><span>Typ</span><b id="type">–</b></p>
-          <p class="row"><span>Våning</span><b id="floor">–</b></p>
+        <label class="field">
+          <span>Sök i katalogen</span>
+          <input id="search" type="search" placeholder="Namn, producent, artikelnummer eller GTIN" autocomplete="off" />
+        </label>
+        <ul id="catalog" class="catalog"></ul>
+      </section>
+
+      <section id="selected" class="card" hidden>
+        <div class="selected-head">
+          <span id="sel-swatch" class="swatch"></span>
+          <div>
+            <p id="sel-name" class="name">–</p>
+            <p id="sel-meta" class="meta">–</p>
+          </div>
         </div>
+        <p class="row"><span>Artikelnummer</span><b id="sel-artnr">–</b></p>
+        <p class="row"><span>GTIN</span><b id="sel-gtin">–</b></p>
+        <label id="gtin-edit" class="field" hidden>
+          <span>Fyll i GTIN från burkens streckkod</span>
+          <span class="inline">
+            <input id="gtin-input" inputmode="numeric" maxlength="14" placeholder="13 siffror" />
+            <button id="gtin-save" type="button">Spara</button>
+          </span>
+        </label>
+        <p class="row"><span>Burk</span><b id="sel-size">–</b></p>
+        <p class="row"><span>Produktsida</span><a id="sel-link" href="#" target="_blank" rel="noopener">systembolaget.se</a></p>
+
+        <fieldset class="modes">
+          <legend>Typ av objekt</legend>
+          <label><input type="radio" name="mode" value="zone" checked /> Burk som zon <small>(rätt storlek, kan tas bort, syns i 3D efter ombearbetning)</small></label>
+          <label><input type="radio" name="mode" value="annotation" /> Burk som punkt <small>(syns direkt, kan inte tas bort)</small></label>
+        </fieldset>
+
+        <button id="arm" type="button" class="primary">Ställ ut vid klick</button>
+      </section>
+
+      <section class="card">
+        <div class="section-head">
+          <h2>Utställda burkar <span id="count" class="count">0</span></h2>
+          <button id="export" type="button" disabled>Exportera CSV</button>
+        </div>
+        <p id="placed-empty" class="muted">Inga burkar ännu.</p>
+        <ul id="placed" class="placed"></ul>
       </section>
 
       <section id="simulator" class="simulator" hidden>
-        <p>Lokalt finns ingen modell. Klicka ett prov.</p>
+        <p>Lokalt finns ingen modell. Klicka ett prov för att simulera ett klick i 3D.</p>
         <div id="object-chips" class="chips"></div>
+      </section>
+
+      <section class="log-wrap">
+        <h2>Logg</h2>
+        <ol id="log" class="log"></ol>
       </section>
     </div>
     <script type="module" src="/src/main.js"></script>

@@ -14,6 +14,8 @@
  *   getProjectId, getUserEmail, getFloors, getObjectInfo, findObjects,
  *   highlightObject, deHighlightAllObjects, gotoObject, gotoFloor,
  *   colorCodeObjects
+ * Added for the beer-can widget (live + mock):
+ *   getBuildingId, createObject, makeApiRequest
  * Live only: client.api is the full StreamBIM.API. It is null in mock mode.
  * colorCodeObjects takes hex colors WITHOUT a leading #.
  * Do not log tokens, and do not call setAuthToken.
@@ -107,6 +109,10 @@ function wrapLive(api) {
     gotoObject: (guid) => api.gotoObject(guid),
     gotoFloor: (floorId) => api.gotoFloor(floorId),
     colorCodeObjects: (map) => api.colorCodeObjects(map),
+    // Ölburks-widgeten: placering av egna objekt.
+    getBuildingId: () => api.getBuildingId(),
+    createObject: (opts) => api.createObject(opts),
+    makeApiRequest: (request) => api.makeApiRequest(request),
   };
 }
 
@@ -194,8 +200,71 @@ function connectMock(handlers) {
       if (!map || typeof map !== "object") throw new Error("colorCodeObjects vill ha en map av guid → hex.");
       return { colored: { ...map } };
     },
+    async getBuildingId() {
+      return mockRest.buildingId;
+    },
+    async createObject({ center, name }) {
+      // Samma axelbyte som StreamBIM: vy [a, b, c] → byggnad [a, c, -b].
+      const [a, b, c] = center;
+      const record = mockRest.store({
+        type: "ifc-objects",
+        attributes: { layer: null, properties: { Name: name, "@kind": "Annotation" }, groups: [], center: [a, c, -b] },
+        relationships: { floors: { data: [{ type: "floors", id: floors[0].id }] } },
+      });
+      return record.id;
+    },
+    async makeApiRequest(request) {
+      return mockRest.handle(request);
+    },
   };
 }
+
+/** Minimal in-memory /v2/ifc-objects för mock-läget. */
+const mockRest = {
+  buildingId: "mock-building",
+  records: new Map(),
+  counter: 0,
+  store(data) {
+    this.counter += 1;
+    const id = `MOCK-OBJ-${String(this.counter).padStart(4, "0")}`;
+    const record = { ...data, id };
+    this.records.set(id, record);
+    return record;
+  },
+  async handle({ url = "", method = "GET", body } = {}) {
+    const verb = method.toUpperCase();
+    const match = url.match(/\/v2\/ifc-objects(?:\/([^?]+))?/);
+    if (!match) throw { code: "notFound", debug: `Mock saknar ${verb} ${url}` };
+    const id = match[1] ? decodeURIComponent(match[1]) : null;
+    if (verb === "POST" && !id) {
+      return JSON.stringify({ data: this.store(body.data) });
+    }
+    if (verb === "GET" && id) {
+      const known = this.records.get(id);
+      if (known) return JSON.stringify({ data: known });
+      const object = objects.find((item) => item.guid === id);
+      if (!object) throw { code: "notFound", debug: id };
+      return JSON.stringify({
+        data: {
+          id,
+          type: "ifc-objects",
+          attributes: { properties: { Name: object.name }, groups: [], center: object.point },
+          relationships: { floors: { data: [{ type: "floors", id: object.floorId }] } },
+        },
+      });
+    }
+    if (verb === "PATCH" && id && this.records.has(id)) {
+      const record = { ...this.records.get(id), ...body.data, id };
+      this.records.set(id, record);
+      return JSON.stringify({ data: record });
+    }
+    if (verb === "DELETE" && id) {
+      this.records.delete(id);
+      return JSON.stringify({ data: null });
+    }
+    throw { code: "notFound", debug: `Mock saknar ${verb} ${url}` };
+  },
+};
 
 function failedClient(reason) {
   const fail = async () => {
@@ -216,6 +285,9 @@ function failedClient(reason) {
     gotoObject: fail,
     gotoFloor: fail,
     colorCodeObjects: fail,
+    getBuildingId: fail,
+    createObject: fail,
+    makeApiRequest: fail,
   };
 }
 
