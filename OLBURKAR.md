@@ -79,3 +79,15 @@ Fliken heter nu **Öl & snus**. Katalogen har ett filter: Alla, Öl eller Snus.
 - Dosan ställs ut som en zon på ⌀ 67 × 21 mm (nominellt mått) med property setet **Snus**: GTIN, namn, producent, typ, vikt, portioner, nikotin (mg/g) och källa.
 - Fotot fungerar även för snus. Streckkoden ger direktträff, och i OCR väger ovanliga ord som "Mini", "Slim" och "ONE" tyngre så att rätt variant hamnar först. Vikt på dosan (t.ex. "22 g") ger plus.
 - CSV-exporten har kolumnerna Kategori, Artikelnummer, GTIN, Namn, Storlek, Antal, Pris och Summa. Snus saknar pris i katalogen.
+
+## Namnsättning av rum (fliken Rum)
+
+Efter **Läs in rum** finns avsnittet **Namnsättning** längst ned i fliken Rum. Logiken ligger i `src/room-naming.js`.
+
+- **Visningsnamn:** en mall för hur rummen visas i listor, i förklaringen och i mock-planen, t.ex. `{Name} {Long Name}` eller `{Våning}: {Name} – {Rumsfunktion}`. Alla egenskaper på rummet går att använda.
+- **Ändra namn manuellt:** tryck **Ändra** på ett rum i listan, eller **Byt namn** när ett rum är valt i modellen. Fyll i rumsnummer (Name) och rumsnamn (Long Name). Enter sparar och Esc avbryter. **Originalvärde** tar bort ändringen. Ändrade rum märks "ändrat", och dubbletter av rumsnummer märks "dubblett".
+- **Numrera om rum:** ett mönster som `{plan}{nr}` eller `A{plan}-{nr}` med antal siffror, startnummer och ordning (nuvarande nummer eller rumsnamn). Det gäller vald våning, eller alla våningar med numrering som börjar om per våning. **Förhandsgranska** visar `201 → B2.01` per rum, och sedan väljer du **Tillämpa** eller **Avbryt**.
+- **Exportera namnlista:** CSV med GUID, våning samt original och nytt rumsnummer och rumsnamn.
+- **Återställ alla:** klicka två gånger. Det fungerar utan `confirm()`, som kan vara blockerat i StreamBIM:s iframe.
+- Ändrade namn används även av färgsättningen. Grupperar du på Long Name, eller kräver Name och Long Name i Datakvalitet, gäller de nya värdena.
+- **Begränsning:** ändringarna sparas i webbläsaren per projekt och ändrar inte IFC-modellen, eftersom rummen kommer från arkitektens IFC och skrivs över vid nästa uppladdning. Namnlistan är tänkt att föras in i projekteringsverktyget.

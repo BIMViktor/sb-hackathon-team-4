@@ -624,3 +624,98 @@ button.wide { width: 100%; margin-bottom: 8px; }
 .seg button:last-child { border-right: 0; }
 
 .seg button.on { background: var(--dx-slate); color: #fff; }
+
+/* ---------- Namnsättning (fliken Rum) ---------- */
+
+.rn { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--dx-border); }
+
+.rn-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+
+.rn-head h3 {
+  margin: 0;
+  color: var(--dx-slate);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rn-count { font-size: 12px !important; }
+
+.rn-field { display: grid; gap: 4px; margin-top: 8px; color: var(--dx-slate); font-size: 12px; font-weight: 500; }
+
+.rn-field input,
+.rn-field select {
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--dx-border);
+  border-radius: var(--dx-radius-sm);
+  background: var(--dx-surface);
+  color: var(--dx-text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.rn-field input:focus,
+.rn-field select:focus { border-color: var(--dx-green); outline: none; box-shadow: 0 0 0 3px rgba(141, 198, 63, 0.25); }
+
+.rn-template { font-family: ui-monospace, Consolas, monospace !important; }
+
+.rn-help { margin-top: 4px !important; font-size: 12px !important; }
+
+.rn-bulk { margin-top: 10px; padding: 8px 10px; border: 1px solid var(--dx-border); border-radius: var(--dx-radius); font-size: 13px; }
+
+.rn-bulk summary { color: var(--dx-slate); font-weight: 700; cursor: pointer; }
+
+.rn-bulk-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; }
+
+.rn-bulk-actions,
+.rn-row-actions,
+.rn-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+
+.rn-bulk-actions { grid-column: 1 / -1; }
+
+.rn-bulk-actions button,
+.rn-row-actions button,
+.rn-actions button { padding: 5px 10px; font-size: 12px; }
+
+.rn .primary { width: auto !important; margin: 0 !important; }
+
+.rn-list { max-height: 360px; margin: 10px 0 0; padding: 0; overflow: auto; list-style: none; }
+
+.rn-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 4px;
+  border-top: 1px solid var(--dx-border);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rn-list li:hover { background: #f8f8f8; }
+
+.rn-list li.on { background: var(--dx-green-tint); }
+
+.rn-list li.rn-editing { display: block; padding: 8px; background: var(--dx-slate-tint); cursor: default; }
+
+.rn-text { display: grid; min-width: 0; }
+
+.rn-text b { overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+
+.rn-text small { color: var(--dx-muted); font-size: 12px; }
+
+.rn-badge { color: var(--dx-green-hover); font-weight: 700; }
+
+.rn-dup { color: var(--dx-error); font-weight: 700; }
+
+.rn-next { color: var(--dx-slate) !important; }
+
+.rn-next b { font-weight: 700; }
+
+.rn-edit { flex: none; padding: 3px 8px !important; font-size: 12px !important; }
+
+.rc-picked .rn-edit { margin-left: 6px; }
+
+.rn-info { margin-top: 8px !important; font-size: 12px !important; }

@@ -13,6 +13,8 @@
  * two at a time and capped at MAX_ROOMS, so we never loop over the whole model.
  */
 
+import { applyOverride, duplicates, formatName, makeOverride, namesCsv, namingStore, renumber, DEFAULT_TEMPLATE } from "./room-naming.js";
+
 const MAX_ROOMS = 400;
 const NO_VALUE = "(saknar värde)";
 const FADED = "d4d9df";
@@ -68,6 +70,12 @@ export function createRoomColors({ ready, mount, log = () => {} }) {
     shown: null, // null = all classes; Set of class keys otherwise
     picked: "",
     loading: false,
+    // Namnsättning
+    store: null,
+    overrides: {},
+    template: DEFAULT_TEMPLATE,
+    editing: "",
+    preview: null, // Map guid → föreslaget nummer
   };
 
   mount.innerHTML = `
@@ -105,6 +113,39 @@ export function createRoomColors({ ready, mount, log = () => {} }) {
       <div class="rc-picked note"></div>
       <ul class="rc-list"></ul>
       <div class="rc-mock" hidden></div>
+
+      <section class="rn">
+        <div class="rn-head"><h3>Namnsättning</h3><span class="rn-count note"></span></div>
+        <label class="rn-field">Visningsnamn
+          <input class="rn-template" spellcheck="false" />
+        </label>
+        <p class="note rn-help">Fält i klammer: {Name}, {Long Name}, {Våning} eller valfri egenskap, t.ex. {Rumsfunktion}.</p>
+        <details class="rn-bulk">
+          <summary>Numrera om rum</summary>
+          <div class="rn-bulk-form">
+            <label class="rn-field">Mönster <input class="rn-pattern" value="{plan}{nr}" spellcheck="false" /></label>
+            <label class="rn-field">Siffror i {nr}
+              <select class="rn-digits"><option>1</option><option selected>2</option><option>3</option></select>
+            </label>
+            <label class="rn-field">Startnummer <input class="rn-start" type="number" value="1" min="0" /></label>
+            <label class="rn-field">Ordning
+              <select class="rn-order"><option value="name">Nuvarande nummer</option><option value="longname">Rumsnamn</option></select>
+            </label>
+            <div class="rn-bulk-actions">
+              <button type="button" class="rn-preview">Förhandsgranska</button>
+              <button type="button" class="rn-apply primary" disabled>Tillämpa</button>
+              <button type="button" class="rn-cancel-preview" hidden>Avbryt</button>
+            </div>
+          </div>
+          <p class="note">Gäller vald våning, eller alla våningar med numrering per våning. {plan} = våningens ordning nerifrån (1, 2, 3 …), {våning} = våningens namn, {nr} = löpnummer.</p>
+        </details>
+        <ul class="rn-list"></ul>
+        <div class="rn-actions">
+          <button type="button" class="rn-export">Exportera namnlista</button>
+          <button type="button" class="rn-reset">Återställ alla</button>
+        </div>
+        <p class="note rn-info">Ändringarna sparas i webbläsaren per projekt och ändrar inte IFC-modellen. Exportera namnlistan (CSV) och för in den i projekteringsverktyget.</p>
+      </section>
     </div>`;
 
   const $ = (sel) => mount.querySelector(sel);
@@ -139,6 +180,11 @@ export function createRoomColors({ ready, mount, log = () => {} }) {
       };
       await Promise.all([worker(), worker()]);
       rooms.sort((a, b) => String(a.name).localeCompare(String(b.name), "sv", { numeric: true }));
+      state.store = namingStore(await client.getProjectId().catch(() => "okänt"));
+      state.overrides = state.store.overrides();
+      state.template = state.store.template();
+      $(".rn-template").value = state.template;
+      for (const r of rooms) applyOverride(r, state.overrides[r.guid]);
       state.rooms = rooms;
       if (!rooms.length) {
         $(".rc-status").textContent = "Hittade inga rum (IfcSpace) i modellen.";
@@ -299,7 +345,7 @@ export function createRoomColors({ ready, mount, log = () => {} }) {
             const miss = missingOf(r);
             return `<li data-guid="${esc(r.guid)}" class="${r.guid === state.picked ? "on" : ""}">
               <span class="rc-dot" style="background:#${color}"></span>
-              <span>${esc(r.name)} <small>${esc(r.longName)}</small>${miss.length ? ` <small class="rc-warn" title="${esc(miss.join(", "))}">⚠ ${miss.length}</small>` : ""}</span>
+              <span>${esc(label(r))}${miss.length ? ` <small class="rc-warn" title="${esc(miss.join(", "))}">⚠ ${miss.length}</small>` : ""}</span>
               <b>${fmt(areaOf(r), 1)}</b></li>`;
           })
           .join("") + (visible.length > 60 ? `<li class="note">… och ${visible.length - 60} till</li>` : "")
@@ -307,11 +353,12 @@ export function createRoomColors({ ready, mount, log = () => {} }) {
 
     const picked = state.rooms.find((r) => r.guid === state.picked);
     $(".rc-picked").innerHTML = picked
-      ? `Valt rum <b>${esc(picked.name)}</b> hör till <b>${esc(c.label(c.keyOf(picked)))}</b>${missingOf(picked).length ? ` · saknar ${esc(missingOf(picked).join(", "))}` : ""}`
+      ? `Valt rum <b>${esc(label(picked))}</b> hör till <b>${esc(c.label(c.keyOf(picked)))}</b>${missingOf(picked).length ? ` · saknar ${esc(missingOf(picked).join(", "))}` : ""} <button type="button" class="rn-edit" data-guid="${esc(picked.guid)}">Byt namn</button>`
       : "";
     mount.querySelectorAll(".rc-item").forEach((el) => el.classList.toggle("hit", !!picked && el.dataset.key === c.keyOf(picked)));
 
     renderMock();
+    renderNaming();
   }
 
   /** Colour map for the viewer: visible classes get their colour, hidden ones are left out (faded). */
@@ -342,7 +389,7 @@ export function createRoomColors({ ready, mount, log = () => {} }) {
             .map((r) => {
               const col = map[r.guid];
               const w = Math.max(28, Math.min(90, Math.sqrt(areaOf(r) || 9) * 9));
-              return `<em data-guid="${esc(r.guid)}" title="${esc(r.name)} ${esc(r.longName)}" class="${r.guid === state.picked ? "on" : ""}" style="width:${w}px;background:${col ? `#${col}` : `#${FADED}`};opacity:${col ? 1 : 0.4}">${esc(r.name)}</em>`;
+              return `<em data-guid="${esc(r.guid)}" title="${esc(label(r))}" class="${r.guid === state.picked ? "on" : ""}" style="width:${w}px;background:${col ? `#${col}` : `#${FADED}`};opacity:${col ? 1 : 0.4}">${esc(r.name)}</em>`;
             })
             .join("")}</div></div>`,
         )
@@ -386,6 +433,178 @@ export function createRoomColors({ ready, mount, log = () => {} }) {
       log(`Kunde inte gå till rummet: ${err?.message || err}`);
     }
   }
+
+
+  /* ---------- Namnsättning ---------- */
+
+  const label = (r) => formatName(state.template, r);
+
+  function renderNaming() {
+    const rooms = scoped();
+    const dupes = duplicates(state.rooms);
+    const changed = state.rooms.filter((r) => r.changed).length;
+    $(".rn-count").textContent = `${changed} ändrade${dupes.size ? ` · ${dupes.size} dubbletter` : ""}`;
+    $(".rn-apply").disabled = !state.preview;
+    $(".rn-cancel-preview").hidden = !state.preview;
+    const sorted = [...rooms].sort((a, b) => String(a.name).localeCompare(String(b.name), "sv", { numeric: true }));
+    $(".rn-list").innerHTML =
+      sorted
+        .slice(0, 200)
+        .map((r) => {
+          if (r.guid === state.editing) {
+            return `<li class="rn-editing" data-guid="${esc(r.guid)}">
+              <label class="rn-field">Rumsnummer <input class="rn-in-name" value="${esc(r.name === r.guid ? "" : r.name)}" /></label>
+              <label class="rn-field">Rumsnamn <input class="rn-in-long" value="${esc(r.longName)}" /></label>
+              <p class="note">Original: ${esc(r.orig?.Name || "–")} ${esc(r.orig?.["Long Name"] || "")}</p>
+              <div class="rn-row-actions">
+                <button type="button" class="rn-save primary">Spara</button>
+                <button type="button" class="rn-revert">Originalvärde</button>
+                <button type="button" class="rn-cancel">Avbryt</button>
+              </div>
+            </li>`;
+          }
+          const next = state.preview?.get(r.guid);
+          const dup = dupes.has(String(r.name));
+          return `<li data-guid="${esc(r.guid)}" class="${r.guid === state.picked ? "on" : ""}">
+            <span class="rn-text"><b>${esc(label(r))}</b>
+              <small>${esc(r.floor)}${r.changed ? ' · <span class="rn-badge">ändrat</span>' : ""}${dup ? ' · <span class="rn-dup">dubblett</span>' : ""}</small>
+              ${next != null && next !== r.name ? `<small class="rn-next">${esc(r.name)} → <b>${esc(next)}</b></small>` : ""}
+            </span>
+            <button type="button" class="rn-edit" data-guid="${esc(r.guid)}">Ändra</button>
+          </li>`;
+        })
+        .join("") + (sorted.length > 200 ? `<li class="note">… och ${sorted.length - 200} till. Välj en våning för att se alla.</li>` : "");
+    if (state.editing) mount.querySelector(".rn-in-name")?.focus();
+  }
+
+  function saveOverrides() {
+    state.store?.saveOverrides(state.overrides);
+  }
+
+  function setOverride(room, values) {
+    const o = makeOverride(room, values);
+    if (Object.keys(o).length) state.overrides[room.guid] = o;
+    else delete state.overrides[room.guid];
+    applyOverride(room, state.overrides[room.guid]);
+  }
+
+  function afterNamingChange() {
+    saveOverrides();
+    state.rooms.sort((a, b) => String(a.name).localeCompare(String(b.name), "sv", { numeric: true }));
+    render();
+    apply();
+  }
+
+  function startEdit(guid) {
+    state.editing = guid;
+    render();
+    mount.querySelector(".rn-editing")?.scrollIntoView({ block: "nearest" });
+  }
+
+  function download(name, text) {
+    const blob = new Blob(["﻿", text], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  $(".rn-template").addEventListener("input", (e) => {
+    state.template = e.target.value || DEFAULT_TEMPLATE;
+    state.store?.saveTemplate(state.template);
+    render();
+  });
+
+  mount.addEventListener("click", (e) => {
+    const edit = e.target.closest(".rn-edit");
+    if (edit) {
+      e.stopPropagation();
+      startEdit(edit.dataset.guid);
+      return;
+    }
+    const row = e.target.closest(".rn-list li[data-guid]");
+    if (!row) return;
+    const room = state.rooms.find((r) => r.guid === row.dataset.guid);
+    if (!room) return;
+    if (e.target.closest(".rn-save")) {
+      setOverride(room, { name: row.querySelector(".rn-in-name").value.trim(), longName: row.querySelector(".rn-in-long").value.trim() });
+      state.editing = "";
+      log(`Namn ändrat: ${label(room)}`);
+      afterNamingChange();
+    } else if (e.target.closest(".rn-revert")) {
+      delete state.overrides[room.guid];
+      applyOverride(room, null);
+      state.editing = "";
+      afterNamingChange();
+    } else if (e.target.closest(".rn-cancel")) {
+      state.editing = "";
+      render();
+    } else if (!row.classList.contains("rn-editing")) {
+      goRoom(room.guid);
+    }
+  });
+
+  mount.addEventListener("keydown", (e) => {
+    if (!e.target.closest(".rn-editing")) return;
+    if (e.key === "Enter") e.target.closest(".rn-editing").querySelector(".rn-save").click();
+    if (e.key === "Escape") e.target.closest(".rn-editing").querySelector(".rn-cancel").click();
+  });
+
+  $(".rn-preview").addEventListener("click", () => {
+    state.preview = renumber(scoped(), {
+      pattern: $(".rn-pattern").value || "{plan}{nr}",
+      digits: Number($(".rn-digits").value),
+      start: Number($(".rn-start").value || 1),
+      order: $(".rn-order").value,
+      floorOrder: state.floors.map((f) => f.name),
+    });
+    render();
+  });
+
+  $(".rn-cancel-preview").addEventListener("click", () => {
+    state.preview = null;
+    render();
+  });
+
+  $(".rn-apply").addEventListener("click", () => {
+    if (!state.preview) return;
+    let n = 0;
+    for (const [guid, name] of state.preview) {
+      const room = state.rooms.find((r) => r.guid === guid);
+      if (!room || room.name === name) continue;
+      setOverride(room, { name, longName: room.longName });
+      n += 1;
+    }
+    state.preview = null;
+    log(`${n} rum har fått nya nummer.`);
+    afterNamingChange();
+  });
+
+  // Två klick i stället för confirm(), som kan vara blockerat i StreamBIM:s iframe.
+  let resetTimer;
+  $(".rn-reset").addEventListener("click", (e) => {
+    if (!Object.keys(state.overrides).length) return;
+    const button = e.currentTarget;
+    if (!button.dataset.armed) {
+      button.dataset.armed = "1";
+      button.textContent = "Klicka igen för att återställa";
+      resetTimer = setTimeout(() => {
+        delete button.dataset.armed;
+        button.textContent = "Återställ alla";
+      }, 4000);
+      return;
+    }
+    clearTimeout(resetTimer);
+    delete button.dataset.armed;
+    button.textContent = "Återställ alla";
+    state.overrides = {};
+    for (const r of state.rooms) applyOverride(r, null);
+    state.preview = null;
+    afterNamingChange();
+  });
+
+  $(".rn-export").addEventListener("click", () => download("rumsnamn.csv", namesCsv(state.rooms)));
 
   /* ---------- Events ---------- */
 
