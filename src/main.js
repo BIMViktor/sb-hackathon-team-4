@@ -8,6 +8,7 @@ import { catalog, canSize, isValidGtin } from "./catalog.js";
 import { objects } from "./mock-data.js";
 import { canName, describeError, placeCan, registry, removeCan, toCsv } from "./beer.js";
 import { connectWidget } from "./streambim.js";
+import { detectBarcodes, matchBeers, prepareImage, recognizeText } from "./ocr.js";
 import "./style.css";
 
 const $ = (selector) => document.querySelector(selector);
@@ -289,6 +290,109 @@ exportEl.addEventListener("click", () => {
   link.click();
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   log("CSV med artikelnummer, GTIN och antal exporterad.", "ok");
+});
+
+/* ---------- Fota burk ---------- */
+
+const photoEl = $("#photo");
+const photoResultEl = $("#photo-result");
+const photoPreviewEl = $("#photo-preview");
+const photoProgressEl = $("#photo-progress");
+const photoStatusEl = $("#photo-status");
+const candidatesEl = $("#candidates");
+const ocrDetailsEl = $("#ocr-details");
+const ocrTextEl = $("#ocr-text");
+
+function setProgress(value, label) {
+  photoProgressEl.hidden = value == null;
+  photoProgressEl.firstElementChild.style.width = `${Math.round((value ?? 0) * 100)}%`;
+  if (label) photoStatusEl.textContent = label;
+}
+
+let lastBarcode = null;
+
+function renderCandidates(results) {
+  candidatesEl.replaceChildren();
+  for (const { beer, score, reasons } of results.slice(0, 3)) {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "beer";
+    const swatch = document.createElement("span");
+    swatch.className = "swatch";
+    swatch.style.background = `#${beer.farg}`;
+    const text = document.createElement("span");
+    text.className = "beer-text";
+    const title = document.createElement("b");
+    title.textContent = `${beer.namn} ${cl(beer)}`;
+    const meta = document.createElement("small");
+    meta.textContent = `Nr ${beer.artikelnummer} · ${reasons.join(", ") || "svag träff"}`;
+    text.append(title, meta);
+    const badge = document.createElement("span");
+    badge.className = `badge ${score >= 0.75 ? "ok" : score >= 0.45 ? "missing" : "bad"}`;
+    badge.textContent = `${Math.round(score * 100)} %`;
+    button.append(swatch, text, badge);
+    button.addEventListener("click", () => {
+      if (lastBarcode && !gtinFor(beer) && isValidGtin(lastBarcode)) {
+        saveOverride(beer.artikelnummer, lastBarcode);
+        log(`Streckkoden ${lastBarcode} sparad som GTIN för Nr ${beer.artikelnummer}.`, "ok");
+      }
+      select(beer);
+      log(`Fotot kopplat till ${beer.namn} ${cl(beer)} (Nr ${beer.artikelnummer}).`, "ok");
+      selectedEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    item.append(button);
+    candidatesEl.append(item);
+  }
+}
+
+photoEl.addEventListener("change", async () => {
+  const file = photoEl.files?.[0];
+  photoEl.value = "";
+  if (!file) return;
+  photoResultEl.hidden = false;
+  candidatesEl.replaceChildren();
+  ocrDetailsEl.hidden = true;
+  if (photoPreviewEl.src) URL.revokeObjectURL(photoPreviewEl.src);
+  photoPreviewEl.src = URL.createObjectURL(file);
+  setProgress(0, "Förbereder bilden…");
+
+  try {
+    const image = await prepareImage(file);
+    const barcode = await detectBarcodes(image.bitmap);
+    const opts = { gtinFor, barcodes: barcode.codes };
+    lastBarcode = barcode.codes.find((code) => isValidGtin(code)) ?? null;
+    if (barcode.codes.length) log(`Streckkod läst: ${barcode.codes.join(", ")}.`);
+
+    let results = barcode.codes.length ? matchBeers("", catalog, opts) : [];
+    if (results[0]?.score === 1) {
+      setProgress(null, "Streckkoden matchar en öl i katalogen.");
+      renderCandidates(results);
+      select(results[0].beer);
+      log(`Streckkod ${barcode.codes[0]} → ${results[0].beer.namn} (Nr ${results[0].beer.artikelnummer}).`, "ok");
+      return;
+    }
+    if (barcode.codes.length) {
+      log(`Streckkoden ${barcode.codes[0]} finns inte i katalogen. Läser texten i stället. Väljer du en öl utan GTIN sparas streckkoden på den.`, "warn");
+    }
+
+    const { text, confidence } = await recognizeText(image.gray, (value, label) => setProgress(value, `${label}…`));
+    ocrTextEl.textContent = text.trim() || "(ingen text hittades)";
+    ocrDetailsEl.hidden = false;
+    results = matchBeers(text, catalog, opts);
+    if (!results.length) {
+      setProgress(null, "Hittade ingen öl i katalogen som liknar texten. Fota närmare och rakt mot namnet, eller sök manuellt.");
+      log(`OCR (säkerhet ${Math.round(confidence)} %) gav ingen träff.`, "warn");
+      return;
+    }
+    const best = results[0];
+    setProgress(null, best.score >= 0.75 ? "Trolig träff. Bekräfta genom att välja den." : "Osäker träff. Välj rätt öl nedan.");
+    renderCandidates(results);
+    log(`OCR: bästa förslag ${best.beer.namn} ${cl(best.beer)} (${Math.round(best.score * 100)} %).`);
+  } catch (error) {
+    setProgress(null, `Kunde inte läsa bilden: ${describeError(error)}`);
+    log(`Bildläsning misslyckades: ${describeError(error)}`, "error");
+  }
 });
 
 /* ---------- Mock-simulator ---------- */

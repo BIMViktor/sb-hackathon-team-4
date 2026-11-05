@@ -18,6 +18,25 @@
       <p class="lead">Välj en öl från Systembolaget och klicka i modellen för att ställa ut burken.</p>
 
       <section class="card">
+        <div class="section-head">
+          <h2>Fota burken</h2>
+          <label class="button primary-outline" for="photo">Ta bild / välj fil</label>
+        </div>
+        <input id="photo" type="file" accept="image/*" capture="environment" hidden />
+        <p id="photo-hint" class="muted">Fota etiketten rakt framifrån, eller streckkoden. Streckkoden ger säker träff, annars läses texten med OCR.</p>
+        <div id="photo-result" hidden>
+          <img id="photo-preview" class="preview" alt="Fotot av burken" />
+          <div class="progress" id="photo-progress" hidden><span></span></div>
+          <p id="photo-status" class="muted"></p>
+          <ul id="candidates" class="catalog"></ul>
+          <details id="ocr-details" hidden>
+            <summary>Text som lästes</summary>
+            <pre id="ocr-text"></pre>
+          </details>
+        </div>
+      </section>
+
+      <section class="card">
         <label class="field">
           <span>Sök i katalogen</span>
           <input id="search" type="search" placeholder="Namn, producent, artikelnummer eller GTIN" autocomplete="off" />

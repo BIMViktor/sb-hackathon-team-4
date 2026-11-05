@@ -277,3 +277,61 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .log li[data-kind="ok"] { color: #0b6e4f; }
 .log li[data-kind="warn"] { color: #7a4e00; }
 .log li[data-kind="error"] { color: #9b1c1c; }
+
+/* ---------- Fota burk ---------- */
+
+label.button {
+  display: inline-block;
+  padding: 6px 12px;
+  border: 1px solid #0b6e4f;
+  border-radius: 999px;
+  color: #0b6e4f;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+label.button:hover { background: #e5f6ee; }
+
+label.button:focus-within { outline: 2px solid #0b6e4f; outline-offset: 2px; }
+
+.preview {
+  display: block;
+  width: 100%;
+  max-height: 180px;
+  margin: 10px 0 8px;
+  border-radius: 10px;
+  object-fit: contain;
+  background: #eef2f5;
+}
+
+.progress {
+  height: 6px;
+  margin-bottom: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e6ebf0;
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #0b6e4f;
+  transition: width 0.2s;
+}
+
+#photo-status { margin-bottom: 8px; }
+
+details { margin-top: 6px; font-size: 13px; color: #5c6b7a; }
+
+details pre {
+  max-height: 140px;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: #f1f4f7;
+  font: 12px/1.4 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+}

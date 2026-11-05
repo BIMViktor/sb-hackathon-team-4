@@ -47,3 +47,14 @@ Katalogen finns i `src/catalog.js`.
 - Listan över utställda burkar ligger i webbläsarens lagring. En annan användare ser burkarna i modellen men inte i listan.
 
 Källor: [streambim-widget-api](https://github.com/streambim/streambim-widget-api), [streambim-api-docs](https://github.com/jonatanjacobsson/streambim-api-docs) (`widget/guides/annotations-custom-objects.md`, `widget/methods/createObject.md`, `widget/methods/getFloors.md`).
+
+## Fota burken (OCR och streckkod)
+
+Överst i panelen finns **Ta bild / välj fil**. På mobilen öppnas kameran, på datorn väljer du en bildfil.
+
+1. **Streckkod:** om webbläsaren har `BarcodeDetector` (Chrome/Edge på Android, macOS och ChromeOS) läses EAN-13 direkt. En träff på GTIN i katalogen väljs automatiskt.
+2. **OCR:** annars läses texten med Tesseract.js (svenska och engelska). Motorn laddas från jsdelivr först när den behövs, så det blir inget nytt npm-paket. Första gången laddas cirka 5–10 MB språkdata.
+3. **Matchning:** texten jämförs fuzzy med namn och producent, och alkoholhalt (t.ex. "5,3 %") och volym ("50 cl") ger plus eller minus. GTIN eller artikelnummer i texten ger direktträff. Upp till tre förslag visas med träffsäkerhet. Du bekräftar genom att välja ett.
+4. Läses en streckkod som inte finns i katalogen och du väljer en öl utan GTIN, sparas streckkoden som GTIN för den ölen.
+
+Logiken ligger i `src/ocr.js`. Begränsningar: matchningen går bara mot katalogen i `src/catalog.js`, inte mot hela Systembolagets sortiment (Systembolaget har inget öppet produkt-API). Text på böjda burkar och stiliserade typsnitt läses ibland fel. Fota rakt mot namnet eller streckkoden.
