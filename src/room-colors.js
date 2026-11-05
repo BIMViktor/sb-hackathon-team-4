@@ -1,0 +1,478 @@
+/**
+ * Rumskollen: colour rooms (IfcSpace) in 3D by group, by area or by data quality.
+ *
+ * - Group:   any property, chosen in a dropdown (guessed: area type, room function …)
+ * - Area:    fixed classes (10/25/50/100 m²) or quantiles (five equally large classes)
+ * - Quality: green = complete, orange = 1 value missing, red = 2+ missing
+ *
+ * Legend: click = show only that class (click again = show all),
+ *         Ctrl/Shift-click = add or remove a class, "Visa alla" resets.
+ * Colours go to the viewer through client.colorCodeSpaces (see src/streambim.js).
+ *
+ * Data: one findObjects call for the space GUIDs, then getObjectInfo per room,
+ * two at a time and capped at MAX_ROOMS, so we never loop over the whole model.
+ */
+
+const MAX_ROOMS = 400;
+const NO_VALUE = "(saknar värde)";
+const FADED = "d4d9df";
+const PALETTE = ["3e63dd", "30a46c", "f76b15", "8e4ec6", "e5484d", "12a594", "d6409f", "ffc53d", "0090ff", "a18072", "5b5bd6", "7ce2fe"];
+const SEQ = ["c2e5ff", "74b9ff", "0090ff", "0d5bd1", "08307a"];
+const QA = {
+  ok: { label: "Komplett", color: "30a46c" },
+  one: { label: "Saknar 1 värde", color: "f76b15" },
+  many: { label: "Saknar 2+ värden", color: "e5484d" },
+};
+const SKIP_KEYS = /^(@kind|Global Id|GUID|Type Object Global Id|uri|Timestamp|@Document Id|@Building Id|BaseType|groups|Type)$/i;
+
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const fmt = (n, d = 0) => (n == null || Number.isNaN(n) ? "–" : n.toLocaleString("sv-SE", { minimumFractionDigits: d, maximumFractionDigits: d }));
+const isEmpty = (v) => v == null || (typeof v === "string" && v.trim() === "");
+
+function parseNum(v) {
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return v;
+  const m = String(v).replace(/\s/g, "").replace(",", ".").match(/-?\d+(\.\d+)?/);
+  return m ? parseFloat(m[0]) : null;
+}
+
+/** Flatten getObjectInfo (live: { properties }, mock: { props, floor }) to plain key → value. */
+function flatten(info) {
+  const src = info?.properties ?? info?.props ?? {};
+  const out = {};
+  for (const [k, v] of Object.entries(src)) {
+    if (v && typeof v === "object") {
+      if (v.Name != null) out[k] = v.Name;
+    } else out[k] = v;
+  }
+  return out;
+}
+
+function floorOf(info) {
+  const storey = info?.properties?.["@Building Storey"];
+  return (storey && typeof storey === "object" ? storey.Name : storey) || info?.floor || "";
+}
+
+export function createRoomColors({ ready, mount, log = () => {} }) {
+  const state = {
+    client: null,
+    rooms: [],
+    keys: [],
+    floors: [],
+    groupKey: "",
+    areaKey: "",
+    required: new Set(),
+    mode: "group",
+    areaBins: "fixed",
+    floor: "",
+    shown: null, // null = all classes; Set of class keys otherwise
+    picked: "",
+    loading: false,
+  };
+
+  mount.innerHTML = `
+    <div class="rc-head">
+      <h2>Färgsätt rum</h2>
+      <button type="button" class="rc-load primary">Läs in rum</button>
+    </div>
+    <p class="rc-status note">Läser in rummen (IfcSpace) och färgar dem i modellen.</p>
+    <div class="rc-body" hidden>
+      <div class="rc-kpis">
+        <div><b class="rc-k-rooms">–</b><span>rum</span></div>
+        <div><b class="rc-k-area">–</b><span>m²</span></div>
+        <div><b class="rc-k-qa">–</b><span>kompletta</span></div>
+      </div>
+      <div class="rc-seg" role="tablist">
+        <button type="button" data-mode="group" class="on">Grupp</button>
+        <button type="button" data-mode="area">Area</button>
+        <button type="button" data-mode="qa">Datakvalitet</button>
+      </div>
+      <div class="rc-opts">
+        <label data-for="group">Gruppera på <select class="rc-group"></select></label>
+        <label data-for="area">Klasser
+          <select class="rc-bins"><option value="fixed">Fasta (10/25/50/100 m²)</option><option value="quantile">Kvantiler (5 lika stora)</option></select>
+        </label>
+        <label>Areaegenskap <select class="rc-area"></select></label>
+        <label>Våning <select class="rc-floor"></select></label>
+        <details data-for="qa" class="rc-req-wrap"><summary>Krav på rumsdata</summary><div class="rc-req"></div></details>
+      </div>
+      <div class="rc-legend"></div>
+      <div class="rc-actions">
+        <button type="button" class="rc-all">Visa alla</button>
+        <button type="button" class="rc-clear">Rensa färger</button>
+      </div>
+      <p class="note rc-hint">Klick = visa bara den klassen. Ctrl/Shift-klick = lägg till eller ta bort.</p>
+      <div class="rc-picked note"></div>
+      <ul class="rc-list"></ul>
+      <div class="rc-mock" hidden></div>
+    </div>`;
+
+  const $ = (sel) => mount.querySelector(sel);
+
+  /* ---------- Loading ---------- */
+
+  async function load() {
+    if (state.loading) return;
+    state.loading = true;
+    $(".rc-load").disabled = true;
+    try {
+      const client = (state.client = await ready);
+      const [floors, guids] = await Promise.all([
+        client.getFloors().catch(() => []),
+        client.findObjects({ key: "@kind", value: "Space", limit: MAX_ROOMS }),
+      ]);
+      state.floors = [...floors].sort((a, b) => (a.height ?? a.elevation ?? 0) - (b.height ?? b.elevation ?? 0));
+      const rooms = [];
+      const queue = [...guids];
+      const worker = async () => {
+        while (queue.length) {
+          const guid = queue.shift();
+          try {
+            const info = await client.getObjectInfo(guid);
+            const props = flatten(info);
+            rooms.push({ guid, props, floor: floorOf(info), name: props.Name || info?.name || guid, longName: props["Long Name"] || "" });
+          } catch (err) {
+            log(`Kunde inte läsa ${guid}: ${err?.message || err}`);
+          }
+          $(".rc-status").textContent = `Läser rum … ${rooms.length}/${guids.length}`;
+        }
+      };
+      await Promise.all([worker(), worker()]);
+      rooms.sort((a, b) => String(a.name).localeCompare(String(b.name), "sv", { numeric: true }));
+      state.rooms = rooms;
+      if (!rooms.length) {
+        $(".rc-status").textContent = "Hittade inga rum (IfcSpace) i modellen.";
+        return;
+      }
+      guessKeys();
+      buildOptions();
+      $(".rc-body").hidden = false;
+      $(".rc-mock").hidden = client.mode !== "mock";
+      $(".rc-load").textContent = "Läs in igen";
+      $(".rc-status").textContent = `${rooms.length} rum${guids.length >= MAX_ROOMS ? ` (max ${MAX_ROOMS})` : ""} · ${state.floors.length} våningar`;
+      render();
+      apply();
+    } catch (err) {
+      $(".rc-status").textContent = `Fel: ${err?.message || err}`;
+      log(`Rumsinläsning misslyckades: ${err?.message || err}`);
+    } finally {
+      state.loading = false;
+      $(".rc-load").disabled = false;
+    }
+  }
+
+  function guessKeys() {
+    const all = new Set();
+    for (const r of state.rooms) Object.keys(r.props).forEach((k) => all.add(k));
+    state.keys = [...all].filter((k) => !SKIP_KEYS.test(k)).sort((a, b) => a.localeCompare(b, "sv"));
+    const values = (k) => state.rooms.map((r) => r.props[k]).filter((v) => !isEmpty(v));
+    const numeric = state.keys.filter((k) => {
+      const v = values(k);
+      return v.length && v.filter((x) => parseNum(x) != null).length / v.length > 0.8 && !/name|nummer|number/i.test(k);
+    });
+    const grouping = state.keys.filter((k) => {
+      const n = new Set(values(k)).size;
+      return n >= 2 && n <= 30 && !numeric.includes(k) && !/^(Name|Long Name)$/i.test(k);
+    });
+    const find = (list, re) => list.find((k) => re.test(k));
+    state.areaKey = find(numeric, /net.*area|nta|bra|loa|boa|netto/i) || find(numeric, /area|yta|bta/i) || numeric[0] || "";
+    state.groupKey = find(grouping, /areatyp|area ?type|rumstyp|rumsfunktion|funktion|function|department|avdelning|occupancy|kategori/i) || grouping[0] || "Long Name";
+    state.required = new Set(["Name", "Long Name", state.areaKey, state.groupKey].filter((k) => k && all.has(k)));
+  }
+
+  function buildOptions() {
+    const opts = (sel) => state.keys.map((k) => `<option ${k === sel ? "selected" : ""}>${esc(k)}</option>`).join("");
+    $(".rc-group").innerHTML = opts(state.groupKey);
+    $(".rc-area").innerHTML = `<option value="">(ingen)</option>` + opts(state.areaKey);
+    const used = new Set(state.rooms.map((r) => r.floor).filter(Boolean));
+    const names = state.floors.map((f) => f.name).filter((n) => used.has(n));
+    for (const n of used) if (!names.includes(n)) names.push(n);
+    $(".rc-floor").innerHTML = `<option value="">Alla våningar</option>` + names.map((n) => `<option ${n === state.floor ? "selected" : ""}>${esc(n)}</option>`).join("");
+    $(".rc-req").innerHTML = state.keys
+      .map((k) => `<label><input type="checkbox" value="${esc(k)}" ${state.required.has(k) ? "checked" : ""}> ${esc(k)}</label>`)
+      .join("");
+  }
+
+  /* ---------- Classification ---------- */
+
+  const scoped = () => state.rooms.filter((r) => !state.floor || r.floor === state.floor);
+  const areaOf = (r) => (state.areaKey ? parseNum(r.props[state.areaKey]) : null);
+  const missingOf = (r) => [...state.required].filter((k) => isEmpty(r.props[k]));
+
+  function classes() {
+    const rooms = scoped();
+    if (state.mode === "group") {
+      const tot = new Map();
+      for (const r of rooms) {
+        const g = isEmpty(r.props[state.groupKey]) ? NO_VALUE : String(r.props[state.groupKey]);
+        tot.set(g, (tot.get(g) || 0) + (areaOf(r) || 0) + 1e-6);
+      }
+      const order = [...tot.keys()].filter((g) => g !== NO_VALUE).sort((a, b) => tot.get(b) - tot.get(a));
+      const color = (g) => (g === NO_VALUE ? "8b8d98" : PALETTE[order.indexOf(g) % PALETTE.length]);
+      const keyOf = (r) => (isEmpty(r.props[state.groupKey]) ? NO_VALUE : String(r.props[state.groupKey]));
+      return { keyOf, order: [...order, NO_VALUE], label: (k) => k, color };
+    }
+    if (state.mode === "area") {
+      let edges = [10, 25, 50, 100];
+      if (state.areaBins === "quantile") {
+        const v = rooms.map(areaOf).filter((x) => x != null).sort((a, b) => a - b);
+        edges = v.length ? [0.2, 0.4, 0.6, 0.8].map((q) => v[Math.min(v.length - 1, Math.floor(q * v.length))]) : edges;
+        edges = edges.filter((e, i) => i === 0 || e > edges[i - 1]);
+      }
+      const keyOf = (r) => {
+        const a = areaOf(r);
+        if (a == null) return "none";
+        const i = edges.findIndex((e) => a < e);
+        return `b${i === -1 ? edges.length : i}`;
+      };
+      const label = (k) => {
+        if (k === "none") return "Ingen area";
+        const i = Number(k.slice(1));
+        if (i === 0) return `< ${fmt(edges[0], 1)} m²`;
+        if (i === edges.length) return `≥ ${fmt(edges[i - 1], 1)} m²`;
+        return `${fmt(edges[i - 1], 1)}–${fmt(edges[i], 1)} m²`;
+      };
+      const step = (SEQ.length - 1) / Math.max(1, edges.length);
+      const color = (k) => (k === "none" ? "8b8d98" : SEQ[Math.round(Number(k.slice(1)) * step)]);
+      return { keyOf, order: [...edges.map((_, i) => `b${i}`), `b${edges.length}`, "none"], label, color };
+    }
+    const keyOf = (r) => {
+      const n = missingOf(r).length;
+      return n === 0 ? "ok" : n === 1 ? "one" : "many";
+    };
+    return { keyOf, order: ["ok", "one", "many"], label: (k) => QA[k].label, color: (k) => QA[k].color };
+  }
+
+  function legend() {
+    const c = classes();
+    const rows = new Map();
+    for (const r of scoped()) {
+      const k = c.keyOf(r);
+      if (!rows.has(k)) rows.set(k, { key: k, label: c.label(k), color: c.color(k), count: 0, area: 0, rooms: [] });
+      const row = rows.get(k);
+      row.count++;
+      row.area += areaOf(r) || 0;
+      row.rooms.push(r);
+    }
+    return { c, items: c.order.filter((k) => rows.has(k)).map((k) => rows.get(k)) };
+  }
+
+  const isShown = (k) => !state.shown || state.shown.has(k);
+
+  /* ---------- Rendering ---------- */
+
+  function render() {
+    const rooms = scoped();
+    const total = rooms.reduce((s, r) => s + (areaOf(r) || 0), 0);
+    const ok = rooms.filter((r) => !missingOf(r).length).length;
+    $(".rc-k-rooms").textContent = fmt(rooms.length);
+    $(".rc-k-area").textContent = fmt(total, 1);
+    $(".rc-k-qa").textContent = rooms.length ? `${Math.round((100 * ok) / rooms.length)} %` : "–";
+    mount.querySelectorAll(".rc-seg button").forEach((b) => b.classList.toggle("on", b.dataset.mode === state.mode));
+    mount.querySelectorAll("[data-for]").forEach((el) => (el.hidden = el.dataset.for !== state.mode));
+
+    const { c, items } = legend();
+    const maxArea = Math.max(1, ...items.map((i) => i.area));
+    let html = items
+      .map(
+        (i) => `<button type="button" class="rc-item ${isShown(i.key) ? "" : "off"}" data-key="${esc(i.key)}">
+          <span class="rc-sw" style="background:#${i.color}"></span>
+          <span class="rc-lbl">${esc(i.label)}<i style="width:${Math.round((100 * i.area) / maxArea)}%;background:#${i.color}"></i></span>
+          <span class="rc-num">${i.count} st</span><span class="rc-num">${fmt(i.area, 1)} m²</span>
+        </button>`,
+      )
+      .join("");
+    if (state.mode === "qa") {
+      const cnt = {};
+      for (const r of rooms) for (const k of missingOf(r)) cnt[k] = (cnt[k] || 0) + 1;
+      const top = Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      if (top.length) html += `<p class="note rc-missing">Saknas oftast: ${top.map(([k, n]) => `<span class="rc-pill">${esc(k)} · ${n}</span>`).join(" ")}</p>`;
+    }
+    $(".rc-legend").innerHTML = html || `<p class="note">Inga rum på vald våning.</p>`;
+
+    // Rooms in the visible classes; clicking one flies to it
+    const visible = items.filter((i) => isShown(i.key)).flatMap((i) => i.rooms.map((r) => ({ r, color: i.color })));
+    $(".rc-list").innerHTML = state.shown
+      ? visible
+          .slice(0, 60)
+          .map(({ r, color }) => {
+            const miss = missingOf(r);
+            return `<li data-guid="${esc(r.guid)}" class="${r.guid === state.picked ? "on" : ""}">
+              <span class="rc-dot" style="background:#${color}"></span>
+              <span>${esc(r.name)} <small>${esc(r.longName)}</small>${miss.length ? ` <small class="rc-warn" title="${esc(miss.join(", "))}">⚠ ${miss.length}</small>` : ""}</span>
+              <b>${fmt(areaOf(r), 1)}</b></li>`;
+          })
+          .join("") + (visible.length > 60 ? `<li class="note">… och ${visible.length - 60} till</li>` : "")
+      : "";
+
+    const picked = state.rooms.find((r) => r.guid === state.picked);
+    $(".rc-picked").innerHTML = picked
+      ? `Valt rum <b>${esc(picked.name)}</b> hör till <b>${esc(c.label(c.keyOf(picked)))}</b>${missingOf(picked).length ? ` · saknar ${esc(missingOf(picked).join(", "))}` : ""}`
+      : "";
+    mount.querySelectorAll(".rc-item").forEach((el) => el.classList.toggle("hit", !!picked && el.dataset.key === c.keyOf(picked)));
+
+    renderMock();
+  }
+
+  /** Colour map for the viewer: visible classes get their colour, hidden ones are left out (faded). */
+  function colorMap() {
+    const { c } = legend();
+    const map = {};
+    for (const r of scoped()) {
+      const k = c.keyOf(r);
+      if (isShown(k)) map[r.guid] = c.color(k);
+    }
+    return map;
+  }
+
+  // In mock mode there is no 3D view, so draw the rooms as tiles per floor.
+  function renderMock() {
+    if (state.client?.mode !== "mock") return;
+    const map = colorMap();
+    const byFloor = new Map();
+    for (const r of state.rooms) {
+      if (!byFloor.has(r.floor)) byFloor.set(r.floor, []);
+      byFloor.get(r.floor).push(r);
+    }
+    $(".rc-mock").innerHTML =
+      `<p class="note">Mock-modell (så här färgas rummen i 3D)</p>` +
+      [...byFloor]
+        .map(
+          ([floor, rooms]) => `<div class="rc-mock-floor ${state.floor && state.floor !== floor ? "dim" : ""}"><span>${esc(floor)}</span><div>${rooms
+            .map((r) => {
+              const col = map[r.guid];
+              const w = Math.max(28, Math.min(90, Math.sqrt(areaOf(r) || 9) * 9));
+              return `<em data-guid="${esc(r.guid)}" title="${esc(r.name)} ${esc(r.longName)}" class="${r.guid === state.picked ? "on" : ""}" style="width:${w}px;background:${col ? `#${col}` : `#${FADED}`};opacity:${col ? 1 : 0.4}">${esc(r.name)}</em>`;
+            })
+            .join("")}</div></div>`,
+        )
+        .join("");
+  }
+
+  /* ---------- Viewer ---------- */
+
+  let timer;
+  function apply() {
+    clearTimeout(timer);
+    // colorCodeSpaces re-runs a search each call; ~3 updates/s is what the viewer draws reliably.
+    timer = setTimeout(async () => {
+      try {
+        await state.client.colorCodeSpaces(colorMap());
+      } catch (err) {
+        log(`Färgsättning misslyckades: ${err?.message || err}`);
+      }
+    }, 300);
+  }
+
+  async function clearColors() {
+    clearTimeout(timer);
+    state.shown = null;
+    try {
+      await state.client?.colorCodeSpaces({});
+    } catch (err) {
+      log(`Kunde inte rensa färger: ${err?.message || err}`);
+    }
+    render();
+    if (state.client?.mode === "mock") $(".rc-mock").querySelectorAll("em").forEach((e) => (e.style.background = `#${FADED}`));
+  }
+
+  async function goRoom(guid) {
+    state.picked = guid;
+    render();
+    try {
+      await state.client.gotoObject(guid);
+      await state.client.highlightObject(guid);
+    } catch (err) {
+      log(`Kunde inte gå till rummet: ${err?.message || err}`);
+    }
+  }
+
+  /* ---------- Events ---------- */
+
+  $(".rc-load").addEventListener("click", load);
+  mount.addEventListener("click", (e) => {
+    const seg = e.target.closest(".rc-seg button");
+    if (seg) {
+      state.mode = seg.dataset.mode;
+      state.shown = null;
+      render();
+      apply();
+      return;
+    }
+    const item = e.target.closest(".rc-item");
+    if (item) {
+      const k = item.dataset.key;
+      const all = legend().items.map((i) => i.key);
+      if (e.ctrlKey || e.metaKey || e.shiftKey) {
+        const s = new Set(state.shown ?? all);
+        s.has(k) ? s.delete(k) : s.add(k);
+        state.shown = s.size === all.length ? null : s;
+      } else {
+        const onlyThis = state.shown && state.shown.size === 1 && state.shown.has(k);
+        state.shown = onlyThis ? null : new Set([k]);
+      }
+      render();
+      apply();
+      return;
+    }
+    const li = e.target.closest(".rc-list li[data-guid], .rc-mock em[data-guid]");
+    if (li) goRoom(li.dataset.guid);
+  });
+  $(".rc-all").addEventListener("click", () => {
+    state.shown = null;
+    render();
+    apply();
+  });
+  $(".rc-clear").addEventListener("click", clearColors);
+  $(".rc-group").addEventListener("change", (e) => {
+    state.groupKey = e.target.value;
+    state.shown = null;
+    render();
+    apply();
+  });
+  $(".rc-area").addEventListener("change", (e) => {
+    state.areaKey = e.target.value;
+    render();
+    apply();
+  });
+  $(".rc-bins").addEventListener("change", (e) => {
+    state.areaBins = e.target.value;
+    state.shown = null;
+    render();
+    apply();
+  });
+  $(".rc-floor").addEventListener("change", async (e) => {
+    state.floor = e.target.value;
+    state.shown = null;
+    render();
+    apply();
+    const f = state.floors.find((x) => x.name === state.floor);
+    if (f) state.client.gotoFloor(f.id).catch(() => {});
+  });
+  $(".rc-req").addEventListener("change", (e) => {
+    const k = e.target.value;
+    e.target.checked ? state.required.add(k) : state.required.delete(k);
+    render();
+    apply();
+  });
+
+  return {
+    /** Call from onPickedObject: marks the room's class in the legend. */
+    picked(guid) {
+      if (!state.rooms.some((r) => r.guid === guid)) return;
+      state.picked = guid;
+      render();
+    },
+    /** Call from onFloorChanged: follow the viewer's floor. */
+    floorChanged(floorId) {
+      const f = state.floors.find((x) => String(x.id) === String(floorId));
+      // Only follow the viewer when a single floor is already chosen in the widget.
+      if (!f || !state.rooms.length || !state.floor || f.name === state.floor) return;
+      state.floor = f.name;
+      state.shown = null;
+      buildOptions();
+      render();
+      apply();
+    },
+  };
+}

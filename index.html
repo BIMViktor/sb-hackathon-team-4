@@ -10,11 +10,18 @@
       <header>
         <div>
           <p class="kicker">StreamBIM hackathon · Team 4</p>
-          <h1>Ölburkar</h1>
+          <h1>Team 4</h1>
         </div>
         <p id="status" class="status">Ansluter…</p>
       </header>
 
+      <nav class="tabs" role="tablist">
+        <button type="button" role="tab" data-tab="beer" class="on" aria-selected="true">Ölburkar</button>
+        <button type="button" role="tab" data-tab="rooms" aria-selected="false">Rum</button>
+        <button type="button" role="tab" data-tab="risk" aria-selected="false">Arbetsmiljö</button>
+      </nav>
+
+      <div id="tab-beer" data-panel="beer">
       <p class="lead">Välj en öl från Systembolaget och klicka i modellen för att ställa ut burken.</p>
 
       <section class="card">
@@ -82,6 +89,10 @@
         <p id="placed-empty" class="muted">Inga burkar ännu.</p>
         <ul id="placed" class="placed"></ul>
       </section>
+      </div>
+
+      <section id="tab-rooms" class="card rooms" data-panel="rooms" hidden></section>
+      <section id="tab-risk" class="card risk" data-panel="risk" hidden></section>
 
       <section id="simulator" class="simulator" hidden>
         <p>Lokalt finns ingen modell. Klicka ett prov för att simulera ett klick i 3D.</p>

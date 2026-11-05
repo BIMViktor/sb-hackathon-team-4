@@ -113,9 +113,18 @@ function wrapLive(api) {
     getBuildingId: () => api.getBuildingId(),
     createObject: (opts) => api.createObject(opts),
     makeApiRequest: (request) => api.makeApiRequest(request),
-    colorCodeSpaces: (map) => api.colorCodeSpaces(map),
+    colorCodeSpaces: (map) => api.colorCodeSpaces(withHash(map)),
     zoomToSearchResult: () => api.zoomToSearchResult(),
   };
+}
+
+/** StreamBIM:s colorCodeSpaces vill ha "#rrggbb". Rumskollen skickar hex utan #. */
+function withHash(map) {
+  const out = {};
+  for (const [guid, hex] of Object.entries(map ?? {})) {
+    out[guid] = String(hex).startsWith("#") ? String(hex) : `#${hex}`;
+  }
+  return out;
 }
 
 function connectMock(handlers) {

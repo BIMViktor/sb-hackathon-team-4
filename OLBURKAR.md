@@ -59,3 +59,13 @@ Källor: [streambim-widget-api](https://github.com/streambim/streambim-widget-ap
 4. Läses en streckkod som inte finns i katalogen och du väljer en öl utan GTIN, sparas streckkoden som GTIN för den ölen.
 
 Logiken ligger i `src/ocr.js`. Begränsningar: matchningen går bara mot katalogen i `src/catalog.js`, inte mot hela Systembolagets sortiment (Systembolaget har inget öppet produkt-API). Text på böjda burkar och stiliserade typsnitt läses ibland fel. Fota rakt mot namnet eller streckkoden.
+
+## Flikar: Rum och Arbetsmiljö
+
+Widgeten har tre flikar: **Ölburkar**, **Rum** och **Arbetsmiljö**. Rum och Arbetsmiljö kommer från `team4-rum-och-arbetsmiljo.patch` (Rumskollen och Riskkollen) och ligger oförändrade i `src/room-colors.js` och `src/risk-check.js`.
+
+- **Rum:** färgsätter rum per grupp (t.ex. areatyp), area eller datakvalitet, med förklaring, våningsfilter och rumslista.
+- **Arbetsmiljö:** riskscan per kategori och våning, riskregister med klick i modellen (sparas i webbläsaren) och CSV-export.
+- Klick i modellen ställer bara ut burkar när fliken Ölburkar är aktiv. Rum följer alltid klick och våningsbyten, och Arbetsmiljö tar emot klick när den fliken är aktiv.
+- Både Rum och "Visa burkar i ölens färg" använder `colorCodeSpaces`. Den som anropas sist gäller.
+- Stilen för båda flikarna har fått Dalux-färgerna.

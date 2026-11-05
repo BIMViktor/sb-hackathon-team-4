@@ -9,6 +9,8 @@ import { objects } from "./mock-data.js";
 import { canName, colorMap, describeError, placeCan, registry, removeCan, toCsv } from "./beer.js";
 import { connectWidget } from "./streambim.js";
 import { detectBarcodes, matchBeers, prepareImage, recognizeText } from "./ocr.js";
+import { createRoomColors } from "./room-colors.js";
+import { createRiskCheck } from "./risk-check.js";
 import "./style.css";
 
 const $ = (selector) => document.querySelector(selector);
@@ -191,6 +193,7 @@ armEl.addEventListener("click", () => {
 });
 
 async function onPick(result) {
+  if (activeTab !== "beer") return;
   const guid = result?.guid;
   if (!state.armed || !state.selected) {
     if (guid) log(`Klick på ${result.name ?? guid}. Välj en öl och tryck "Ställ ut vid klick".`);
@@ -439,7 +442,8 @@ photoEl.addEventListener("change", async () => {
 
 function renderChips(client) {
   chipsEl.replaceChildren();
-  for (const object of objects) {
+  // Rum och riskobjekt har egna mock-vyer i sina flikar.
+  for (const object of objects.filter((item) => !item.guid.startsWith("MOCK-ROOM-") && !item.guid.startsWith("MOCK-RISK-"))) {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = object.name;
@@ -451,6 +455,29 @@ function renderChips(client) {
     chipsEl.append(button);
   }
 }
+
+/* ---------- Flikar ---------- */
+
+let activeTab = "beer";
+let roomColors = null;
+let riskCheck = null;
+const tabsEl = $(".tabs");
+
+tabsEl.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-tab]");
+  if (!button) return;
+  activeTab = button.dataset.tab;
+  for (const tab of tabsEl.querySelectorAll("button")) {
+    const on = tab === button;
+    tab.classList.toggle("on", on);
+    tab.setAttribute("aria-selected", String(on));
+  }
+  for (const panel of document.querySelectorAll("[data-panel]")) panel.hidden = panel.dataset.panel !== activeTab;
+  if (activeTab !== "beer" && state.armed) {
+    state.armed = false;
+    updateArm();
+  }
+});
 
 /* ---------- Start ---------- */
 
@@ -472,9 +499,19 @@ const ready = loadWidgetApi().then(() =>
   connectWidget({
     onPickedObject(result) {
       ready.then(() => onPick(result));
+      if (result?.guid) {
+        roomColors?.picked(result.guid);
+        if (activeTab === "risk") riskCheck?.picked(result.guid);
+      }
+    },
+    onFloorChanged(floorId) {
+      roomColors?.floorChanged(floorId);
     },
   }),
 );
+
+roomColors = createRoomColors({ ready, mount: $("#tab-rooms"), log: (message) => log(`Rum: ${message}`, "warn") });
+riskCheck = createRiskCheck({ ready, mount: $("#tab-risk"), log: (message) => log(`Arbetsmiljö: ${message}`, "warn") });
 
 ready
   .then(async (client) => {
