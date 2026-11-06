@@ -102,3 +102,28 @@ När en öl identifieras med kameran tänds kortet **Egenkontroll öldrickning**
 - **Koppling till modellen:** ställs en burk av samma öl ut efter en klarmarkerad egenkontroll, får objektet egenskaperna Egenkontroll, Egenkontroll datum och Egenkontroll utförd av.
 - **Export:** CSV med alla egenkontroller i projektet, ett svar per kolumn plus kommentarer.
 - **Lagring:** i webbläsaren per projekt. StreamBIM:s checklist-API beskriver bara läsning och export, inte hur man skapar checklistor, så egenkontrollen kan inte bli en StreamBIM-checklista härifrån.
+
+## IFC-objekt i modellen
+
+Varje burk eller dosa som ställs ut blir också ett **IFC-objekt** (`IfcBuildingElementProxy`) i filen `ol-och-snus.ifc`, som widgeten håller och laddar upp till StreamBIM. Panelen **IFC-modell** ligger under Utställt. Koden finns i `src/ifc-writer.js` (filen), `src/ifc-publish.js` (uppladdning) och `src/ifc-panel.js` (panelen).
+
+**Filen (IFC2X3)**
+- Geometri: burken är fem staplade cylindrar (fot, kropp, axel, hals och kant) och dosan är botten plus ett något större lock. Varje objekt har produktens färg.
+- Property set **Systembolaget** (öl) eller **Snus** med samma egenskaper som zonerna, plus egenkontrollen om den är klarmarkerad.
+- Placering i byggnadens koordinater, i en `IfcBuildingStorey` med samma namn och nivå som våningen i StreamBIM. Varje objekt har ett eget IFC GlobalId som behålls mellan publiceringarna.
+- Filen validerades lokalt (antal attribut per entitet enligt IFC2X3, referenser och ASCII-kodning). Den är inte öppnad i ifcopenshell eller någon IFC-läsare, eftersom inget sådant verktyg fanns i miljön.
+
+**Publicering** (följer `streambim-api-docs`)
+1. Uppladdningsbiljett och uppladdning till S3, som är verifierat från widget.
+2. Första gången: nytt dokument i vald mapp. Därefter: ny revision av samma dokument.
+3. Första gången: kopplas till byggnaden i ett lager (`ifc-files`). Standard är `OL_OCH_SNUS`, och befintliga lager föreslås.
+4. Konvertering via `/cmv3/converter-jobs`.
+
+**Publicera automatiskt** (förvalt): första gången väljer man mapp och trycker Publicera. Därefter laddas en ny revision upp 15 s efter senaste utställningen eller borttagningen, så att flera objekt samlas i samma revision. **Ladda ner IFC** fungerar alltid, även utan behörighet.
+
+**Att verifiera i sandlådan (VERIFY)**
+- `ifc-files` (koppla till byggnad) kräver **projektadmin** enligt dokumentationen.
+- `/cmv3/converter-jobs` misslyckades från widget i dokumentationens test 2026-11-01. Widgeten försöker ändå. Misslyckas den visas instruktionen att starta konverteringen i StreamBIM. En konvertering gäller **hela byggnaden**.
+- Att byggnadens koordinater i widgeten är samma som IFC-koordinaterna. Hamnar objekten fel justeras det med **Förskjutning x/y/z** i inställningarna. Testa med ett objekt först.
+- Om lagernamnet `OL_OCH_SNUS` accepteras eller om ett befintligt lager måste väljas.
+- När IFC-objekten är konverterade finns både zonen och IFC-objektet. Zonerna kan tas bort i listan.

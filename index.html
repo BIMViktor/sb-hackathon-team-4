@@ -128,6 +128,41 @@
         <button id="colorize" type="button" class="wide" disabled>Visa i produktens färg</button>
         <p id="placed-empty" class="muted">Inget utställt ännu.</p>
         <ul id="placed" class="placed"></ul>
+
+        <div id="ifc" class="ifc">
+          <div class="section-head">
+            <h2>IFC-modell</h2>
+            <span id="ifc-state" class="badge">Tom</span>
+          </div>
+          <p id="ifc-summary" class="muted"></p>
+          <div class="ifc-actions">
+            <button id="ifc-publish" type="button" class="primary" disabled>Publicera IFC i StreamBIM</button>
+            <button id="ifc-download" type="button" disabled>Ladda ner IFC</button>
+          </div>
+          <label class="ifc-check"><input id="ifc-auto" type="checkbox" checked /> Publicera automatiskt efter utställning</label>
+          <details id="ifc-settings" class="ifc-settings">
+            <summary>Inställningar</summary>
+            <label id="ifc-folder-row" class="field">
+              <span>Mapp i StreamBIM</span>
+              <select id="ifc-folder"><option value="">Öppna för att hämta mappar</option></select>
+            </label>
+            <label id="ifc-layer-row" class="field">
+              <span>Lager i byggnaden</span>
+              <input id="ifc-layer" list="ifc-layers" spellcheck="false" />
+              <datalist id="ifc-layers"></datalist>
+            </label>
+            <div class="field">
+              <span>Förskjutning (m), om objekten hamnar fel mot modellen</span>
+              <span class="ifc-offset">
+                <label>x <input id="ifc-dx" type="number" step="0.001" /></label>
+                <label>y <input id="ifc-dy" type="number" step="0.001" /></label>
+                <label>z <input id="ifc-dz" type="number" step="0.001" /></label>
+              </span>
+            </div>
+            <button id="ifc-forget" type="button">Börja om med nytt dokument</button>
+          </details>
+          <ol id="ifc-steps" class="ifc-steps"></ol>
+        </div>
       </section>
       </div>
 

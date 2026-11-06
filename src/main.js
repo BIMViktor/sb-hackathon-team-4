@@ -11,6 +11,8 @@ import { connectWidget } from "./streambim.js";
 import { detectBarcodes, matchBeers, prepareImage, recognizeText } from "./ocr.js";
 import { createRoomColors } from "./room-colors.js";
 import { createRiskCheck } from "./risk-check.js";
+import { createIfcPanel } from "./ifc-panel.js";
+import { newGuid } from "./ifc-writer.js";
 import { ANSWERS, POINTS, checkProps, checkStore, checksCsv, createCheck, problems, progressOf, statusOf, TITLE } from "./egenkontroll.js";
 import "./style.css";
 
@@ -235,6 +237,9 @@ async function onPick(result) {
       mode: placed.mode,
       center: placed.center,
       productId: beer.id,
+      ifcGuid: newGuid(),
+      floorId: placed.floorId ?? null,
+      extraProps,
       kategori: beer.kategori,
       artikelnummer: beer.artikelnummer,
       storlek: cl(beer),
@@ -248,6 +253,7 @@ async function onPick(result) {
     state.cans.add(can);
     renderPlaced();
     if (state.colorized) applyColors();
+    ifcPanel.changed();
     log(`${canName(beer)} utställd (${placed.mode === "zone" ? "zon" : "punkt"}, id ${placed.id}).`, "ok");
     if (extraProps.length) log(`Egenkontrollen (${extraProps[0][1].split(": ")[1]}) följer med som egenskap på objektet.`, "ok");
     if (!gtin) log(`Obs: ${refLabel(beer)} saknar GTIN. Fältet sparades tomt.`, "warn");
@@ -304,6 +310,7 @@ function renderPlaced() {
         state.cans.remove(can.id);
         renderPlaced();
         if (state.colorized) applyColors();
+        ifcPanel.changed();
         log(deleted ? `Burken ${can.id} är borttagen.` : `Punkten ${can.id} finns kvar i StreamBIM men är borttagen ur listan.`, deleted ? "ok" : "warn");
       } catch (error) {
         log(`Kunde inte ta bort ${can.id}: ${describeError(error)}`, "error");
@@ -462,6 +469,16 @@ photoEl.addEventListener("change", async () => {
     setProgress(null, `Kunde inte läsa bilden: ${describeError(error)}`);
     log(`Bildläsning misslyckades: ${describeError(error)}`, "error");
   }
+});
+
+/* ---------- IFC-modell ---------- */
+
+const ifcPanel = createIfcPanel({
+  root: document,
+  getClient: () => state.client,
+  getCans: () => state.cans?.list() ?? [],
+  findProduct: (can) => catalog.find((product) => product.id === (can.productId ?? can.artikelnummer)),
+  log,
 });
 
 /* ---------- Egenkontroll öldrickning ---------- */
@@ -711,6 +728,7 @@ ready
       const projectId = await client.getProjectId().catch(() => "okänt");
       state.cans = registry(projectId);
       state.ekStore = checkStore(projectId);
+      await ifcPanel.init(projectId);
       state.userEmail = await client.getUserEmail().catch(() => "");
       renderCheckHistory();
       renderPlaced();

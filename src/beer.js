@@ -172,7 +172,7 @@ export async function placeCan(client, { beer, gtin, point, pickedGuid, mode = "
       method: "PATCH",
       body: { data: { id, type: "ifc-objects", attributes, relationships } },
     });
-    return { id, mode, center: [x, y, z] };
+    return { id, mode, center: [x, y, z], floorId: current.relationships?.floors?.data?.[0]?.id ?? null };
   }
 
   const floorId = await floorFor(client, ctx, pickedGuid, z);
@@ -217,7 +217,7 @@ export async function placeCan(client, { beer, gtin, point, pickedGuid, mode = "
     }),
   );
   if (!record?.id) throw new Error("StreamBIM svarade utan id för den nya burken.");
-  return { id: record.id, mode, center: [x, y, z] };
+  return { id: record.id, mode, center: [x, y, z], floorId };
 }
 
 /** Färgkarta för colorCodeSpaces: zon-id → ölens färg. Punkter är inga Space och hoppas över. */

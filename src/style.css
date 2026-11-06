@@ -810,3 +810,48 @@ a.button-link:hover { background: var(--dx-slate-tint); }
 .sel-actions { display: flex; gap: 6px; margin-top: 10px; }
 
 .sel-actions > * { flex: 1; text-align: center; }
+
+/* ---------- IFC-modell ---------- */
+
+.ifc { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--dx-border); }
+
+.ifc-actions { display: flex; gap: 6px; margin-top: 8px; }
+
+.ifc-actions button { padding: 7px 10px; font-size: 12px; }
+
+.ifc-actions button.primary { flex: 1; width: auto; margin: 0; }
+
+.ifc-check { display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--dx-slate); font-size: 13px; }
+
+.ifc-check input { accent-color: var(--dx-green); }
+
+.ifc-settings { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--dx-border); border-radius: var(--dx-radius); font-size: 13px; }
+
+.ifc-settings summary { margin-bottom: 4px; color: var(--dx-slate); font-weight: 700; cursor: pointer; }
+
+.ifc-settings select,
+.ifc-settings input:not([type="checkbox"]) {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--dx-border);
+  border-radius: var(--dx-radius-sm);
+  background: var(--dx-surface);
+  font: inherit;
+  font-size: 13px;
+}
+
+.ifc-offset { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+
+.ifc-offset label { display: flex; align-items: center; gap: 4px; color: var(--dx-muted); }
+
+.ifc-settings button { padding: 5px 10px; font-size: 12px; }
+
+.ifc-steps { display: grid; gap: 3px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 12px; }
+
+.ifc-steps:empty { display: none; }
+
+.ifc-steps li { padding: 4px 8px; border-radius: var(--dx-radius-sm); background: var(--dx-slate-tint); }
+
+.ifc-steps li[data-status="ok"] { background: var(--dx-green-tint); color: var(--dx-green-hover); }
+.ifc-steps li[data-status="fail"] { background: var(--dx-error-tint); color: var(--dx-error); }
+.ifc-steps li[data-status="skip"] { color: var(--dx-muted); }

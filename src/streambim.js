@@ -249,8 +249,47 @@ const mockRest = {
     this.records.set(id, record);
     return record;
   },
+  documents: new Map(),
+  ifcFiles: [{ id: "mock-building-900", attributes: { layer: "ARK" } }, { id: "mock-building-901", attributes: { layer: "VVS~EL" } }],
   async handle({ url = "", method = "GET", body } = {}) {
     const verb = method.toUpperCase();
+    const doc = (data) => JSON.stringify({ data });
+    if (url.includes("/v2/upload-tickets") && verb === "POST") {
+      return doc({ id: `mock-ticket-${Date.now()}`, type: "upload-ticket", attributes: { ...body.data.attributes, s3presignedurl: "mock://s3/upload" } });
+    }
+    if (url.includes("/v2/folders") && verb === "GET") {
+      return doc([
+        { id: "7", type: "folders", attributes: { path: "/Modeller" } },
+        { id: "8", type: "folders", attributes: { path: "/Modeller/Hackathon" } },
+      ]);
+    }
+    if (url.match(/\/v2\/documents\/(\d+)/) && verb === "GET") {
+      const id = url.match(/\/v2\/documents\/(\d+)/)[1];
+      const known = this.documents.get(id);
+      if (!known) throw { code: "notFound", debug: id };
+      return doc({ id, type: "documents", attributes: { ...known } });
+    }
+    if (url.includes("/v2/documents") && verb === "POST") {
+      const id = String(2000 + this.documents.size);
+      this.documents.set(id, { ...body.data.attributes, revision: 1 });
+      return doc({ id, type: "documents", attributes: this.documents.get(id) });
+    }
+    if (url.includes("/v2/document-revisions") && verb === "POST") {
+      const [id, revision] = body.data.id.split("-");
+      const known = this.documents.get(id);
+      if (known) known.revision = Number(revision);
+      return doc({ id: body.data.id, type: "document-revisions", attributes: body.data.attributes });
+    }
+    if (url.includes("/v2/ifc-files") && verb === "GET") return doc(this.ifcFiles);
+    if (url.includes("/v2/ifc-files") && verb === "POST") {
+      const id = `${body.data.relationships.building.data.id}-${body.data.relationships.document.data.id}`;
+      this.ifcFiles.push({ id, attributes: body.data.attributes });
+      return doc({ id, type: "ifc-files", attributes: body.data.attributes });
+    }
+    if (url.startsWith("/cmv3/")) {
+      // Som live enligt docs-svepet: /cmv3 nås inte från widgeten.
+      throw new Error("DataCloneError: XMLHttpRequest object could not be cloned. (mock)");
+    }
     const match = url.match(/\/v2\/ifc-objects(?:\/([^?]+))?/);
     if (!match) throw { code: "notFound", debug: `Mock saknar ${verb} ${url}` };
     const id = match[1] ? decodeURIComponent(match[1]) : null;
